@@ -75,6 +75,8 @@ export interface Session {
   lastAssistantSummary?: string; // away_summary / 末条文本（截断）
   recentReplies?: string[]; // 最近 N 条助手回复文本（截断，旧→新），看"AI 到哪一步了"
   model?: string; // assistant.message.model
+  contextTokens?: number; // 当前上下文占用 token（= usage 四项之和）
+  contextWindow?: number; // 推断的上下文窗口上限（200000 | 1000000）
 
   // —— 时间 ——
   startedAt: number; // epoch ms
@@ -138,6 +140,8 @@ export interface TranscriptMarkers {
   lastAssistantSummary?: string; // away_summary / 末条 text（截断）
   recentReplies?: string[]; // 最近 N 条助手回复文本（截断，旧→新）
   model?: string;
+  contextTokens?: number; // 当前上下文占用 token（= usage 四项之和）；无 usage 省略
+  contextWindow?: number; // 推断的上下文窗口上限（200000 | 1000000）；无 tokens 省略
   permissionMode?: PermissionMode; // 来自 permission-mode 记录
   /** 末条 assistant 记录的 stop_reason（判断 tool_use 在飞 vs end_turn）。 */
   lastStopReason?: 'end_turn' | 'tool_use' | string;

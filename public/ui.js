@@ -49,6 +49,15 @@ export function fmtDuration(ms) {
   return `${h}h${m % 60}m`;
 }
 
+/** 1234→"1K"，1_000_000→"1M"，1_500_000→"1.5M"。 */
+export function fmtTokens(n) {
+  if (n == null) return '—';
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return Math.round(n / 1000) + 'K';
+  const m = n / 1_000_000;
+  return (Number.isInteger(m) ? String(m) : m.toFixed(1)) + 'M';
+}
+
 /** epoch ms → HH:MM:SS（本地时区）。 */
 export function fmtClock(ms) {
   const d = new Date(ms);
@@ -162,6 +171,10 @@ function card(session, ctx, now) {
   if (session.pid) meta.append(el('span', '', `pid ${session.pid}`));
   head.append(meta);
 
+  // 上下文用量条（收起态也可见，监控核心）。
+  const ctxBar = ctxEl(session);
+  if (ctxBar) head.append(ctxBar);
+
   head.addEventListener('click', () => ctx.onToggle(session.sessionId));
   c.append(head);
 
@@ -180,10 +193,50 @@ function card(session, ctx, now) {
   }
 
   if (isOpen) {
-    c.append(repliesEl(session)); // 「最近回复」——AI 到哪一步了
-    c.append(timelineEl(session, ctx));
+    c.append(repliesEl(session)); // 「最近回复」——AI 到哪一步了（主角）
+    // 状态时间线：默认折叠，避免一大把时间戳喧宾夺主。
+    const details = el('details', 'tl-details');
+    // 记住每个会话时间线的展开状态，重渲染后保持。
+    if (ctx.timelineOpen && ctx.timelineOpen.has(session.sessionId)) details.open = true;
+    const summary = el('summary', 'tl-summary', '详细时间线');
+    details.append(summary);
+    details.addEventListener('toggle', (e) => {
+      e.stopPropagation();
+      if (!ctx.timelineOpen) return;
+      if (details.open) ctx.timelineOpen.add(session.sessionId);
+      else ctx.timelineOpen.delete(session.sessionId);
+    });
+    // summary 点击不要冒泡到卡片头（避免折叠整张卡）。
+    summary.addEventListener('click', (e) => e.stopPropagation());
+    details.append(timelineEl(session, ctx));
+    c.append(details);
   }
   return c;
+}
+
+/** 上下文用量条：读 contextTokens/contextWindow，百分比/剩余在视图派生。 */
+function ctxEl(session) {
+  const used = session.contextTokens;
+  const win = session.contextWindow;
+  if (used == null || !win) return null; // 老会话/无 usage → 不渲染，优雅降级
+  const ratio = Math.min(1, used / win); // 条宽钳到 100%
+  const pct = Math.round((used / win) * 100);
+  const lvl = pct >= 90 ? 'lvl-danger' : pct >= 70 ? 'lvl-warn' : 'lvl-ok';
+  const remain = Math.max(0, win - used);
+
+  const box = el('div', `ctx ${lvl}`);
+  box.title = `上下文 ${fmtTokens(used)} / ${fmtTokens(win)}（${pct}%）· 剩余 ${fmtTokens(remain)}`;
+
+  const track = el('div', 'ctx-track');
+  const fill = el('div', 'ctx-fill');
+  fill.style.transform = `scaleX(${ratio})`; // 只动 transform → SSE 更新丝滑补间
+  track.append(fill);
+
+  const label = el('div', 'ctx-label');
+  label.append(el('span', 'ctx-used', `${fmtTokens(used)} / ${fmtTokens(win)}`));
+  label.append(el('span', 'ctx-pct', `${pct}%`));
+  box.append(track, label);
+  return box;
 }
 
 /** 渲染「最近回复」块：最近 N 条助手消息（新→旧），看 AI 进行到哪一步。 */

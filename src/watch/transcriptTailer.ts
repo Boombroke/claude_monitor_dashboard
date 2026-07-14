@@ -46,6 +46,7 @@ interface Tracked {
   lastStopReason?: string;
   turnDoneMarkerAt?: number;
   lastRecordAt?: number;
+  contextTokens?: number; // 最新主链 assistant usage 四项之和 = 当前上下文占用
 }
 
 /** 保留最近多少条助手回复。 */
@@ -59,6 +60,52 @@ export interface TranscriptTailerOptions {
 /** cwd → transcript 目录 slug：把 '/'、'.'、'_' 都替换成 '-'（实测规则，LOSSY，不可反推）。 */
 export function slugFromCwd(cwd: string): string {
   return cwd.replace(/[/._]/g, '-');
+}
+
+const WINDOW_200K = 200_000;
+const WINDOW_1M = 1_000_000;
+
+/**
+ * 从 assistant.message.usage 求当前上下文占用 token：四项之和。
+ * 缺字段/负数/非有限按 0；非对象或全 0 → undefined（未知）。
+ */
+export function computeContextTokens(usage: unknown): number | undefined {
+  if (usage === null || typeof usage !== 'object') return undefined;
+  const u = usage as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+  const total =
+    n(u.input_tokens) +
+    n(u.cache_creation_input_tokens) +
+    n(u.cache_read_input_tokens) +
+    n(u.output_tokens);
+  return total > 0 ? total : undefined;
+}
+
+/** 已知原生 1M 上下文窗口的模型族（Claude 5 家族 / Opus 4.8）。 */
+function isNative1M(model: string): boolean {
+  const m = model.toLowerCase();
+  return (
+    m.includes('opus-4-8') ||
+    m.includes('sonnet-5') ||
+    m.includes('sonnet-4-6') ||
+    m.includes('fable-5') ||
+    m.includes('haiku-4-5')
+  );
+}
+
+/**
+ * 推断上下文窗口大小（无直接字段）。优先级：
+ *   1. 模型名含 [1m] 部署标记 → 1M
+ *   2. 已知原生 1M 模型族 → 1M（让刚开、token 还少的会话也判准）
+ *   3. 实测 token > 200K → 必是 1M
+ *   4. 其余（未知模型/旧 200K 模型）→ 200K
+ * 保证正常情况 tokens ≤ 窗口，避免百分比 > 100%。
+ */
+export function inferContextWindow(model: string | undefined, contextTokens: number | undefined): number {
+  if (model && /\[1m\]/i.test(model)) return WINDOW_1M;
+  if (model && isNative1M(model)) return WINDOW_1M;
+  if (contextTokens !== undefined && contextTokens > WINDOW_200K) return WINDOW_1M;
+  return WINDOW_200K;
 }
 
 export class TranscriptTailer implements Watcher {
@@ -337,7 +384,13 @@ export class TranscriptTailer implements Watcher {
         const message = r.message;
         if (message !== null && typeof message === 'object') {
           const m = message as Record<string, unknown>;
-          if (typeof m.model === 'string') t.model = m.model;
+          // 仅主链(非 sidechain)assistant 代表主线模型与上下文占用；
+          // 子代理(Task 工具)的小 usage 不能让主线读数缩水。
+          if (r.isSidechain !== true) {
+            if (typeof m.model === 'string') t.model = m.model;
+            const ct = computeContextTokens(m.usage);
+            if (ct !== undefined) t.contextTokens = ct; // latest-wins = 当前占用
+          }
           if (typeof m.stop_reason === 'string') t.lastStopReason = m.stop_reason;
           const content = m.content;
           if (Array.isArray(content)) {
@@ -390,6 +443,7 @@ export class TranscriptTailer implements Watcher {
     t.lastStopReason = undefined;
     t.turnDoneMarkerAt = undefined;
     t.lastRecordAt = undefined;
+    t.contextTokens = undefined;
   }
 
   /** 由累积状态构造对外的 TranscriptMarkers（在此处截断上下文字段），并回调。 */
@@ -412,6 +466,10 @@ export class TranscriptTailer implements Watcher {
     }
 
     if (t.model !== undefined) m.model = t.model;
+    if (t.contextTokens !== undefined) {
+      m.contextTokens = t.contextTokens;
+      m.contextWindow = inferContextWindow(t.model, t.contextTokens);
+    }
     if (t.permissionMode !== undefined) m.permissionMode = t.permissionMode;
     if (t.lastStopReason !== undefined) m.lastStopReason = t.lastStopReason;
     if (t.turnDoneMarkerAt !== undefined) m.turnDoneMarkerAt = t.turnDoneMarkerAt;

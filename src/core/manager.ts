@@ -145,6 +145,8 @@ export class SessionManager {
       patch.lastAssistantSummary = markers.lastAssistantSummary;
     if (markers.recentReplies !== undefined) patch.recentReplies = markers.recentReplies;
     if (markers.model !== undefined) patch.model = markers.model;
+    if (markers.contextTokens !== undefined) patch.contextTokens = markers.contextTokens;
+    if (markers.contextWindow !== undefined) patch.contextWindow = markers.contextWindow;
     if (markers.gitBranch !== undefined) patch.gitBranch = markers.gitBranch;
     if (markers.permissionMode !== undefined) patch.permissionMode = markers.permissionMode;
     if (Object.keys(patch).length > 0 && this.store.get(markers.sessionId)) {

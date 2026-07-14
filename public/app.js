@@ -8,8 +8,10 @@ import { ALL_STATES, STATE_LABEL, renderSessions, tickDurations, el } from './ui
 const sessions = new Map();
 let serverSkewMs = 0;
 
-/** 展开的会话（显示时间线）。 */
+/** 展开的会话（显示详情）。 */
 const expanded = new Set();
+/** 展开了「详细时间线」小节的会话（保持折叠状态）。 */
+const timelineOpen = new Set();
 /** sessionId → { status:'loading'|'ok'|'error', events?:SessionEvent[] } */
 const timelines = new Map();
 
@@ -45,6 +47,7 @@ function doRender() {
     filters,
     expanded,
     timelines,
+    timelineOpen,
     onToggle: toggleSession,
     onRefetch: fetchTimeline,
     onFocus: focusSession,

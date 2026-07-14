@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# ccmon runtime state (never commit local config / secrets / history)
+.ccmon/
+*.ccmon-bak-*
+ccmon.sqlite
+ccmon.sqlite-*
+
+# editor
+.vscode/
+.idea/
+*.swp

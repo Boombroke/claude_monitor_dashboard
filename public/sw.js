@@ -1,5 +1,5 @@
 // ccmon service worker — M1 极简版：缓存 app 壳，处理 push（M3 接入 Web Push）。
-const CACHE = 'ccmon-v2';
+const CACHE = 'ccmon-v3';
 const SHELL = ['/', '/index.html', '/app.js', '/ui.js', '/styles.css', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -18,8 +18,18 @@ self.addEventListener('fetch', (e) => {
   if (url.pathname.startsWith('/events') || url.pathname.startsWith('/api') || url.pathname.startsWith('/hooks')) {
     return;
   }
-  // 静态资源：缓存优先，回退网络。
-  e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request)));
+  // 静态资源：网络优先、回退缓存。
+  // 这样只要服务在跑，刷新永远拿到最新代码（避免旧前端被缓存卡住）；离线才用缓存兜底。
+  e.respondWith(
+    fetch(e.request)
+      .then((res) => {
+        // 顺带更新缓存。
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(e.request).then((hit) => hit || Response.error())),
+  );
 });
 
 // M3：Web Push

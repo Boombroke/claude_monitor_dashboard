@@ -1,7 +1,7 @@
 // ccmon PWA — M3 版（零依赖 vanilla JS ES module，消费 SSE）。
 // 状态 + SSE + 过滤 + 时间线拉取 + 通知 + 安装提示；渲染委托给 ui.js。
 
-import { ALL_STATES, STATE_LABEL, renderSessions, el } from './ui.js';
+import { ALL_STATES, STATE_LABEL, renderSessions, tickDurations, el } from './ui.js';
 
 // —— 全局状态 ——
 /** sessionId → Session */
@@ -38,7 +38,7 @@ function withToken(path) {
 }
 
 // —— 渲染 ——
-function render() {
+function doRender() {
   renderSessions(app, {
     sessions,
     serverSkewMs,
@@ -49,6 +49,30 @@ function render() {
     onRefetch: fetchTimeline,
     onFocus: focusSession,
   });
+}
+
+// 用 View Transitions API 让卡片重排/增删丝滑过渡（不支持则直接渲染）。
+// 仅对"结构性"渲染启用；每秒 tick 的时长刷新不走过渡（见下）。
+let vtPending = false;
+let vtDirty = false; // 过渡进行中又来了更新 → 结束后补渲染一次
+function render(useTransition = true) {
+  if (useTransition && typeof document.startViewTransition === 'function') {
+    if (vtPending) {
+      vtDirty = true; // 别丢更新：等当前过渡结束再渲染
+      return;
+    }
+    vtPending = true;
+    const vt = document.startViewTransition(() => doRender());
+    vt.finished.finally(() => {
+      vtPending = false;
+      if (vtDirty) {
+        vtDirty = false;
+        render(true);
+      }
+    });
+    return;
+  }
+  doRender();
 }
 
 // —— 进入会话：POST /focus，把该会话的终端切到前台 ——
@@ -293,8 +317,10 @@ initChips();
 initSearch();
 initInstall();
 
-// 每秒刷新 timeInState / 等待时长显示。
-setInterval(render, 1000);
+// 每秒就地刷新时长文本（轻量，不重建 DOM、不触发过渡动画）。
+setInterval(() => {
+  tickDurations(app, { sessions, serverSkewMs });
+}, 1000);
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});

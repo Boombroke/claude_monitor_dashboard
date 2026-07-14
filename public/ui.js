@@ -63,6 +63,27 @@ export function el(tag, cls, text) {
   return e;
 }
 
+/** UUID → 合法的 view-transition-name（只留字母数字）。 */
+export function cssId(id) {
+  return String(id).replace(/[^a-zA-Z0-9]/g, '');
+}
+
+/**
+ * 每秒就地更新各卡片的时长文本（不重建 DOM、不触发 View Transition）。
+ * 只改 .dur 的 textContent，性能开销极小。
+ */
+export function tickDurations(root, ctx) {
+  const now = Date.now() + ctx.serverSkewMs;
+  for (const cardEl of root.querySelectorAll('.card[data-sid]')) {
+    const s = ctx.sessions.get(cardEl.dataset.sid);
+    if (!s) continue;
+    const durEl = cardEl.querySelector('.dur');
+    if (!durEl) continue;
+    const dur = fmtDuration(now - (s.stateSince || now));
+    durEl.textContent = durEl.dataset.waiting === '1' ? `等待 ${dur}` : dur;
+  }
+}
+
 function stateName(st) {
   return STATE_LABEL[st] || st || '?';
 }
@@ -110,6 +131,9 @@ function timelineEl(session, ctx) {
 function card(session, ctx, now) {
   const isOpen = ctx.expanded.has(session.sessionId);
   const c = el('div', `card s-${session.state}${isOpen ? ' expanded' : ''}`);
+  c.dataset.sid = session.sessionId;
+  // View Transitions：给每张卡片唯一名字，重排时自动补间位移。
+  c.style.viewTransitionName = 'card-' + cssId(session.sessionId);
 
   const head = el('div', 'card-head');
   head.append(el('div', 'name', session.name || session.sessionId.slice(0, 8)));
@@ -128,11 +152,15 @@ function card(session, ctx, now) {
 
   const waiting = ATTENTION.includes(session.state);
   const dur = fmtDuration(now - (session.stateSince || now));
-  const bits = [waiting ? `等待 ${dur}` : dur];
-  if (session.model) bits.push(session.model);
-  if (session.gitBranch) bits.push(`⎇ ${session.gitBranch}`);
-  if (session.pid) bits.push(`pid ${session.pid}`);
-  head.append(el('div', 'meta', bits.join(' · ')));
+  const meta = el('div', 'meta');
+  // 时长 span 单独标记，供每秒 tick 就地更新（不重建 DOM）。
+  const durSpan = el('span', 'dur', waiting ? `等待 ${dur}` : dur);
+  durSpan.dataset.waiting = waiting ? '1' : '0';
+  meta.append(durSpan);
+  if (session.model) meta.append(el('span', '', session.model));
+  if (session.gitBranch) meta.append(el('span', '', `⎇ ${session.gitBranch}`));
+  if (session.pid) meta.append(el('span', '', `pid ${session.pid}`));
+  head.append(meta);
 
   head.addEventListener('click', () => ctx.onToggle(session.sessionId));
   c.append(head);
@@ -190,7 +218,9 @@ export function renderSessions(root, ctx) {
       .sort((a, b) => (a.stateSince || 0) - (b.stateSince || 0)); // 等最久的在前
     if (items.length === 0) continue;
     const wrap = el('section', section.key === 'attention' ? 'attention' : '');
-    wrap.append(el('div', 'section-title', `${section.title} · ${items.length}`));
+    const title = el('div', 'section-title', section.title);
+    title.append(el('span', 'count', String(items.length)));
+    wrap.append(title);
     for (const s of items) wrap.append(card(s, ctx, now));
     root.append(wrap);
   }

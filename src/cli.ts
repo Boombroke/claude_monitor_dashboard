@@ -57,7 +57,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 async function main(): Promise<void> {
-  const { command, overrides } = parseArgs(process.argv.slice(2));
+  const { command, overrides, flags } = parseArgs(process.argv.slice(2));
   const cfg = loadConfig(overrides);
 
   switch (command) {
@@ -83,18 +83,43 @@ async function main(): Promise<void> {
     }
 
     case 'doctor': {
-      await printDoctor(cfg);
+      const { runDoctor } = await import('./hooks/doctor.ts');
+      const { ok, lines } = await runDoctor(cfg);
+      process.stdout.write('ccmon doctor：\n' + lines.map((l) => '  ' + l).join('\n') + '\n');
+      process.exit(ok ? 0 : 1);
       break;
     }
 
     case 'install-hooks': {
-      process.stdout.write('install-hooks：由 hooks-cli 叶子模块实现（M2）。\n');
-      process.exit(2);
+      const { installHooks } = await import('./hooks/installer.ts');
+      const dryRun = flags.has('dry-run');
+      const res = await installHooks(cfg, { dryRun, port: cfg.port, ...(cfg.token ? { token: cfg.token } : {}) });
+      process.stdout.write(res.diff + '\n');
+      if (dryRun) {
+        process.stdout.write('（dry-run：未写入。去掉 --dry-run 实际安装。）\n');
+      } else if (res.changed) {
+        process.stdout.write(`已写入 ${cfg.settingsPath}${res.backupPath ? `（备份：${res.backupPath}）` : ''}\n`);
+      } else {
+        process.stdout.write('无变更（hooks 已是最新）。\n');
+      }
+      break;
+    }
+
+    case 'uninstall-hooks': {
+      const { uninstallHooks } = await import('./hooks/installer.ts');
+      const res = await uninstallHooks(cfg);
+      if (res.changed) {
+        process.stdout.write(`已移除 ccmon hooks${res.backupPath ? `（备份：${res.backupPath}）` : ''}\n`);
+      } else {
+        process.stdout.write('无 ccmon hooks 可移除。\n');
+      }
       break;
     }
 
     default:
-      process.stderr.write(`未知命令：${command}\n用法：ccmon [start|status|doctor|install-hooks]\n`);
+      process.stderr.write(
+        `未知命令：${command}\n用法：ccmon [start|status|doctor|install-hooks|uninstall-hooks]\n`,
+      );
       process.exit(1);
   }
 }
@@ -124,16 +149,6 @@ async function printStatus(cfg: Config): Promise<void> {
     }
   }
   process.stdout.write(`Claude 会话（${rows.length}）：\n${rows.join('\n')}\n`);
-}
-
-async function printDoctor(cfg: Config): Promise<void> {
-  const { existsSync } = await import('node:fs');
-  process.stdout.write('ccmon doctor：\n');
-  process.stdout.write(`  ~/.claude 目录：${existsSync(cfg.claudeDir) ? '✓' : '✗ 不存在'}\n`);
-  process.stdout.write(`  sessions 目录：${existsSync(cfg.sessionsDir) ? '✓' : '✗ 不存在'}\n`);
-  process.stdout.write(`  settings.json：${existsSync(cfg.settingsPath) ? '✓' : '✗ 不存在'}\n`);
-  process.stdout.write(`  绑定：${cfg.host}:${cfg.port}${cfg.lan ? ' (LAN, 需 token)' : ' (loopback)'}\n`);
-  process.stdout.write('  完整体检（版本/hook/bypass 警告）由 hooks-cli 叶子模块补全。\n');
 }
 
 main().catch((err) => {

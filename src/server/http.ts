@@ -91,6 +91,27 @@ export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
     };
   });
 
+  // —— 配对：LAN URL + 二维码（QR 模块可用时返回 SVG，否则仅 URL） ——
+  app.get('/api/pairing', async (_req, reply) => {
+    const { lanIPv4, pairingUrl } = await import('./net.ts');
+    const ip = lanIPv4();
+    if (!ip) return reply.code(404).send({ error: 'no LAN address' });
+    const url = pairingUrl(ip, cfg.port, cfg.token);
+    let svg: string | undefined;
+    try {
+      // 动态路径避免静态解析——QR 模块为可选增强，未构建时优雅降级为仅 URL。
+      const qrPath = './qr.ts';
+      const mod = (await import(qrPath)) as { qrSvg: (t: string) => string };
+      svg = mod.qrSvg(url);
+    } catch {
+      svg = undefined; // QR 模块不可用/编码失败：仅返回 URL
+    }
+    if ((_req.query as Record<string, unknown> | undefined)?.format === 'svg' && svg) {
+      return reply.header('Content-Type', 'image/svg+xml').send(svg);
+    }
+    return { url, ip, port: cfg.port, hasQr: !!svg, svg };
+  });
+
   // —— SSE ——
   app.get('/events', (req, reply) => {
     hub.addClient(reply, store.all(), now());

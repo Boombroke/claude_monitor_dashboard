@@ -10,9 +10,23 @@
   </head>
   <body>
     <header>
-      <h1>ccmon</h1>
-      <div id="conn" class="conn">连接中…</div>
+      <div class="brand">
+        <h1>ccmon</h1>
+        <div id="conn" class="conn">连接中…</div>
+      </div>
+      <div class="controls">
+        <button id="btn-install" class="btn" type="button" hidden>安装为应用</button>
+        <button id="btn-notify" class="btn" type="button" hidden>启用通知</button>
+        <label class="mute">
+          <input id="mute-toggle" type="checkbox" />
+          <span>静音</span>
+        </label>
+      </div>
     </header>
+    <div class="filterbar">
+      <input id="search" class="search" type="search" placeholder="搜索名称或项目…" autocomplete="off" />
+      <div id="state-chips" class="chips"></div>
+    </div>
     <main id="app"><div class="empty">加载会话中…</div></main>
     <script type="module" src="/app.js"></script>
   </body>

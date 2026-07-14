@@ -63,9 +63,19 @@ async function main(): Promise<void> {
   switch (command) {
     case 'start': {
       const server = await startDaemon(cfg);
-      const shown = cfg.host === '0.0.0.0' ? `http://<本机LAN-IP>:${cfg.port}` : server.url;
       process.stdout.write(`ccmon 已启动 → ${server.url}\n`);
-      if (cfg.host === '0.0.0.0') process.stdout.write(`  LAN 访问：${shown}${cfg.token ? `/?token=${cfg.token}` : ''}\n`);
+      if (cfg.host === '0.0.0.0') {
+        const { lanIPv4, pairingUrl } = await import('./server/net.ts');
+        const ip = lanIPv4();
+        if (ip) {
+          process.stdout.write(`  LAN 访问（手机同一 WiFi）：${pairingUrl(ip, cfg.port, cfg.token)}\n`);
+          const base = server.url.replace(/\/$/, '');
+          process.stdout.write(`  扫码配对：浏览器打开 ${base}/api/pairing 查看二维码\n`);
+        } else {
+          process.stdout.write('  LAN：未检测到局域网 IPv4 地址\n');
+        }
+        if (cfg.token) process.stdout.write(`  token：${cfg.token}\n`);
+      }
       process.stdout.write('  按 Ctrl-C 停止。\n');
       const shutdown = async () => {
         process.stdout.write('\n正在停止…\n');

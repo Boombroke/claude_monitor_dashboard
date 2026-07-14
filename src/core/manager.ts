@@ -24,6 +24,7 @@ import type {
   Notifier,
   ServerEvent,
   Session,
+  SessionState,
 } from '../types.ts';
 
 export interface ManagerDeps {
@@ -37,6 +38,8 @@ export interface ManagerDeps {
   onTrack?: (sessionId: string, cwd: string) => void;
   /** 会话判死时回调 —— 用于让 transcriptTailer 停止跟踪。 */
   onUntrack?: (sessionId: string) => void;
+  /** 每次状态转移回调 —— 用于历史持久化（History）。 */
+  onStateTransition?: (session: Session, from: SessionState | undefined) => void;
   now?: () => number;
 }
 
@@ -58,6 +61,9 @@ export class SessionManager {
   private readonly broadcast: (event: ServerEvent) => void;
   private readonly onTrack: ((sessionId: string, cwd: string) => void) | undefined;
   private readonly onUntrack: ((sessionId: string) => void) | undefined;
+  private readonly onStateTransition:
+    | ((session: Session, from: SessionState | undefined) => void)
+    | undefined;
   private readonly now: () => number;
 
   private readonly raw = new Map<string, RawInputs>();
@@ -73,6 +79,7 @@ export class SessionManager {
     this.broadcast = deps.broadcast;
     this.onTrack = deps.onTrack;
     this.onUntrack = deps.onUntrack;
+    this.onStateTransition = deps.onStateTransition;
     this.now = deps.now ?? Date.now;
 
     // store 变更 → SSE 广播 + notifier 转移通知。
@@ -84,6 +91,7 @@ export class SessionManager {
       this.broadcast({ type: 'session.update', session: change.session });
       if (change.prev !== undefined && change.prev !== change.session.state) {
         if (this.notifier) this.notifier.onTransition(change.session, change.prev);
+        this.onStateTransition?.(change.session, change.prev);
         // 进入 DEAD：通知 tailer 停止跟踪该会话。
         if (change.session.state === 'DEAD') {
           this.trackedSessions.delete(change.session.sessionId);

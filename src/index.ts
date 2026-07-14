@@ -17,6 +17,7 @@ import { createHttpServer } from './server/http.ts';
 import { Notifier } from './notify/notifier.ts';
 import { DesktopChannel } from './notify/desktop.ts';
 import { NtfyChannel } from './notify/ntfy.ts';
+import { History } from './db/history.ts';
 
 export interface RunningServer {
   url: string;
@@ -27,6 +28,14 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
   const store = new InMemorySessionStore();
   const reconciler = new DefaultReconciler({ hookTtlMs: cfg.hookTtlMs });
   const hub = new SseHub();
+
+  // 历史持久化（node:sqlite）。失败不致命：降级为无持久化。
+  let history: History | undefined;
+  try {
+    history = new History();
+  } catch {
+    history = undefined;
+  }
 
   // transcript tailer：抽取标记喂给 manager。先声明，稍后由 manager 的
   // onTrack/onUntrack 驱动它跟踪/停止会话。
@@ -47,7 +56,10 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
     );
   }
   const notifier = new Notifier(cfg, channels, {
-    broadcast: (view) => hub.broadcast({ type: 'notification', notification: view }),
+    broadcast: (view) => {
+      hub.broadcast({ type: 'notification', notification: view });
+      history?.recordNotification(view);
+    },
   });
 
   // manager 需要 broadcast，而 http 需要 onHook（由 manager 提供）——先声明 manager。
@@ -60,6 +72,8 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
     broadcast: (event) => hub.broadcast(event),
     onTrack: (sessionId, sessionCwd) => tailer.track(sessionId, sessionCwd),
     onUntrack: (sessionId) => tailer.untrack(sessionId),
+    onStateTransition: (session, from) =>
+      history?.recordTransition(session.sessionId, session.stateSince, from, session.state, session.attentionReason),
   });
   onHookRef = (p) => manager.onHook(p);
 
@@ -68,6 +82,7 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
     store,
     hub,
     onHook: (p) => onHookRef(p),
+    ...(history ? { history } : {}),
   });
 
   const watcher = new SessionsWatcher(cfg, {
@@ -94,6 +109,7 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
       await watcher.stop();
       await tailer.stop();
       await http.close();
+      history?.close();
     },
   };
 }

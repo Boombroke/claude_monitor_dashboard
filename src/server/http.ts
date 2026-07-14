@@ -20,12 +20,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 /** public/ 位于仓库根，相对 src/server 上溯两级。 */
 const PUBLIC_DIR = join(__dirname, '..', '..', 'public');
 
+/** 历史查询接口（由 db/history.History 实现；此处解耦声明避免直接耦合）。 */
+export interface HistoryProvider {
+  eventsFor(sessionId: string, limit?: number): unknown[];
+  notificationsFor(sessionId: string, limit?: number): unknown[];
+  stateDurations(sessionId: string): Record<string, number>;
+}
+
 export interface HttpDeps {
   cfg: Config;
   store: SessionStore;
   hub: SseHub;
   /** 收到 hook POST 时回调（reconciler 消费）。 */
   onHook: (payload: HookPayload) => void;
+  /** 可选：持久化历史查询（M3）。 */
+  history?: HistoryProvider;
   now?: () => number;
 }
 
@@ -37,7 +46,7 @@ export interface HttpServer {
 }
 
 export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
-  const { cfg, store, hub, onHook } = deps;
+  const { cfg, store, hub, onHook, history } = deps;
   const now = deps.now ?? Date.now;
   const app = Fastify({ logger: false, bodyLimit: 1_048_576 });
 
@@ -64,6 +73,22 @@ export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
     const s = store.get(id);
     if (!s) return reply.code(404).send({ error: 'not found' });
     return { sessionId: id, events: s.events };
+  });
+
+  // —— 持久化历史（重启后仍可查）；未启用 history 时回退到内存时间线 ——
+  app.get('/api/sessions/:id/history', async (req) => {
+    const { id } = req.params as { id: string };
+    if (!history) {
+      const s = store.get(id);
+      return { sessionId: id, events: s ? s.events : [], notifications: [], durations: {}, persisted: false };
+    }
+    return {
+      sessionId: id,
+      events: history.eventsFor(id),
+      notifications: history.notificationsFor(id),
+      durations: history.stateDurations(id),
+      persisted: true,
+    };
   });
 
   // —— SSE ——

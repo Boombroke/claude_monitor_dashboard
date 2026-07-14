@@ -17,11 +17,11 @@
 
 ## 状态
 
-早期开发中。里程碑：
+开发中。里程碑：
 
-- **M1** 零配置文件监听仪表盘（busy/idle/done + DEAD 检测）
-- **M2** hook 接收 + 桌面/ntfy 通知
-- **M3** PWA 打磨 + 历史 + Web Push + 存在感抑制
+- **M1** ✅ 零配置文件监听仪表盘（busy/idle/done + DEAD 检测）
+- **M2** ✅ hook 接收 + 桌面/ntfy 通知（去重/限流/合并/存在感抑制）
+- **M3** 🚧 PWA 打磨 + 历史（SQLite）+ Web Push + LAN 二维码配对
 
 ## 技术栈
 

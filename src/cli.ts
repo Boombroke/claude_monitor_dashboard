@@ -70,7 +70,8 @@ async function main(): Promise<void> {
         if (ip) {
           process.stdout.write(`  LAN 访问（手机同一 WiFi）：${pairingUrl(ip, cfg.port, cfg.token)}\n`);
           const base = server.url.replace(/\/$/, '');
-          process.stdout.write(`  扫码配对：浏览器打开 ${base}/api/pairing 查看二维码\n`);
+          const q = cfg.token ? `?token=${cfg.token}` : '';
+          process.stdout.write(`  扫码配对：浏览器打开 ${base}/pairing.html${q} 查看二维码\n`);
         } else {
           process.stdout.write('  LAN：未检测到局域网 IPv4 地址\n');
         }

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ccmon · 手机配对</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .pair-wrap { max-width: 420px; margin: 40px auto; text-align: center; padding: 0 20px; }
+      .pair-wrap h1 { font-size: 20px; }
+      .pair-hint { color: var(--muted); font-size: 13px; margin: 8px 0 24px; }
+      .qr-box { background: #fff; padding: 16px; border-radius: 12px; display: inline-block; }
+      .qr-box svg { display: block; width: 260px; height: 260px; }
+      .pair-url {
+        margin-top: 20px; font-size: 12px; color: var(--muted);
+        word-break: break-all; background: var(--panel);
+        border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+      }
+      .pair-err { color: var(--approval); margin-top: 24px; }
+    </style>
+  </head>
+  <body>
+    <div class="pair-wrap">
+      <h1>📱 手机配对</h1>
+      <div class="pair-hint">用手机相机或浏览器扫描二维码，在同一 WiFi 下打开 ccmon 面板。</div>
+      <div id="content"><div class="pair-hint">加载中…</div></div>
+    </div>
+    <script type="module">
+      const token = new URLSearchParams(location.search).get('token');
+      const url = '/api/pairing' + (token ? '?token=' + encodeURIComponent(token) : '');
+      const content = document.getElementById('content');
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        content.innerHTML = '';
+        if (data.svg) {
+          const box = document.createElement('div');
+          box.className = 'qr-box';
+          box.innerHTML = data.svg;
+          content.append(box);
+        }
+        const u = document.createElement('div');
+        u.className = 'pair-url';
+        u.textContent = data.url;
+        content.append(u);
+      } catch (e) {
+        content.innerHTML =
+          '<div class="pair-err">未启用局域网模式或无法获取配对信息。<br>用 <code>ccmon start --lan --token &lt;token&gt;</code> 启动。</div>';
+      }
+    </script>
+  </body>
+</html>

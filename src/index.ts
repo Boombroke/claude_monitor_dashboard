@@ -11,6 +11,7 @@ import { InMemorySessionStore } from './core/store.ts';
 import { DefaultReconciler } from './core/reconciler.ts';
 import { SessionManager } from './core/manager.ts';
 import { SessionsWatcher } from './watch/sessionsWatcher.ts';
+import { TranscriptTailer } from './watch/transcriptTailer.ts';
 import { LivenessReaper } from './core/liveness.ts';
 import { SseHub } from './server/sse.ts';
 import { createHttpServer } from './server/http.ts';
@@ -25,13 +26,21 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
   const reconciler = new DefaultReconciler({ hookTtlMs: cfg.hookTtlMs });
   const hub = new SseHub();
 
+  // transcript tailer：抽取标记喂给 manager。先声明，稍后由 manager 的
+  // onTrack/onUntrack 驱动它跟踪/停止会话。
+  const tailer = new TranscriptTailer(cfg, {
+    onMarkers: (markers) => manager.onMarkers(markers),
+  });
+
   // manager 需要 broadcast，而 http 需要 onHook（由 manager 提供）——先声明 manager。
   let onHookRef: (p: HookPayload) => void = () => {};
-  const manager = new SessionManager({
+  const manager: SessionManager = new SessionManager({
     cfg,
     store,
     reconciler,
     broadcast: (event) => hub.broadcast(event),
+    onTrack: (sessionId, sessionCwd) => tailer.track(sessionId, sessionCwd),
+    onUntrack: (sessionId) => tailer.untrack(sessionId),
     // notifier: 叶子模块接入点（M2）
   });
   onHookRef = (p) => manager.onHook(p);
@@ -55,6 +64,7 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
     onDead: (pid) => manager.onPidDead(pid),
   });
 
+  await tailer.start();
   await watcher.start();
   reaper.start();
   const url = await http.listen();
@@ -64,6 +74,7 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
     async stop() {
       reaper.stop();
       await watcher.stop();
+      await tailer.stop();
       await http.close();
     },
   };

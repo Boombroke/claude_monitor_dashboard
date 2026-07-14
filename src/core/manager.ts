@@ -33,6 +33,10 @@ export interface ManagerDeps {
   notifier?: Notifier;
   /** 广播 store 变更到 SSE。 */
   broadcast: (event: ServerEvent) => void;
+  /** 会话首次出现（拿到 cwd）时回调 —— 用于让 transcriptTailer 开始跟踪。 */
+  onTrack?: (sessionId: string, cwd: string) => void;
+  /** 会话判死时回调 —— 用于让 transcriptTailer 停止跟踪。 */
+  onUntrack?: (sessionId: string) => void;
   now?: () => number;
 }
 
@@ -52,10 +56,14 @@ export class SessionManager {
   private readonly reconciler: Reconciler;
   private readonly notifier: Notifier | undefined;
   private readonly broadcast: (event: ServerEvent) => void;
+  private readonly onTrack: ((sessionId: string, cwd: string) => void) | undefined;
+  private readonly onUntrack: ((sessionId: string) => void) | undefined;
   private readonly now: () => number;
 
   private readonly raw = new Map<string, RawInputs>();
   private readonly debounceTimers = new Map<string, NodeJS.Timeout>();
+  /** 已通知 tailer 跟踪过的会话（避免重复 track）。 */
+  private readonly trackedSessions = new Set<string>();
 
   constructor(deps: ManagerDeps) {
     this.cfg = deps.cfg;
@@ -63,6 +71,8 @@ export class SessionManager {
     this.reconciler = deps.reconciler;
     this.notifier = deps.notifier;
     this.broadcast = deps.broadcast;
+    this.onTrack = deps.onTrack;
+    this.onUntrack = deps.onUntrack;
     this.now = deps.now ?? Date.now;
 
     // store 变更 → SSE 广播 + notifier 转移通知。
@@ -72,8 +82,13 @@ export class SessionManager {
         return;
       }
       this.broadcast({ type: 'session.update', session: change.session });
-      if (this.notifier && change.prev !== undefined && change.prev !== change.session.state) {
-        this.notifier.onTransition(change.session, change.prev);
+      if (change.prev !== undefined && change.prev !== change.session.state) {
+        if (this.notifier) this.notifier.onTransition(change.session, change.prev);
+        // 进入 DEAD：通知 tailer 停止跟踪该会话。
+        if (change.session.state === 'DEAD') {
+          this.trackedSessions.delete(change.session.sessionId);
+          this.onUntrack?.(change.session.sessionId);
+        }
       }
     });
   }
@@ -87,7 +102,15 @@ export class SessionManager {
     r.deadPid = undefined;
     // 先把身份/上下文字段写入 store（即使状态不变，UI 也要更新 name/cwd/pid）。
     this.applyIdentity(snap);
+    this.maybeTrack(snap.sessionId, snap.cwd);
     this.recompute(snap.sessionId);
+  }
+
+  /** 首次拿到会话 cwd 时通知 tailer 开始跟踪（幂等）。 */
+  private maybeTrack(sessionId: string, cwd: string): void {
+    if (!cwd || this.trackedSessions.has(sessionId)) return;
+    this.trackedSessions.add(sessionId);
+    this.onTrack?.(sessionId, cwd);
   }
 
   /** sessions 文件被删（pid 维度）→ 定位会话并判死。 */
@@ -136,6 +159,7 @@ export class SessionManager {
     } else if (payload.permission_mode) {
       this.store.upsert(sid, { permissionMode: payload.permission_mode });
     }
+    if (payload.cwd) this.maybeTrack(sid, payload.cwd);
     // hook 驱动的状态（尤其 NEEDS_APPROVAL/DONE）立即生效，不去抖。
     this.recompute(sid, /*immediate*/ true);
   }

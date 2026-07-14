@@ -76,6 +76,7 @@ async function main(): Promise<void> {
           process.stdout.write('  LAN：未检测到局域网 IPv4 地址\n');
         }
         if (cfg.token) process.stdout.write(`  token：${cfg.token}\n`);
+        process.stdout.write('  ⚠ 注意：LAN 模式下，持 token 的设备点「进入会话」会切换本机终端窗口焦点。\n');
       }
       process.stdout.write('  按 Ctrl-C 停止。\n');
       const shutdown = async () => {

@@ -47,7 +47,40 @@ function render() {
     timelines,
     onToggle: toggleSession,
     onRefetch: fetchTimeline,
+    onFocus: focusSession,
   });
+}
+
+// —— 进入会话：POST /focus，把该会话的终端切到前台 ——
+async function focusSession(id, btn) {
+  const prev = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '进入中…';
+  }
+  try {
+    const res = await fetch(withToken(`/api/sessions/${encodeURIComponent(id)}/focus`), { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (btn) {
+      if (res.ok && data.ok) {
+        btn.textContent = data.method === 'opened-new' ? '已开新终端' : '已切换 ✓';
+      } else {
+        btn.textContent = '未找到终端';
+      }
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }, 1500);
+    }
+  } catch {
+    if (btn) {
+      btn.textContent = '失败';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }, 1500);
+    }
+  }
 }
 
 // —— 时间线拉取（优先 /history，回退 /timeline）——

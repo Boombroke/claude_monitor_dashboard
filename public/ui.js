@@ -115,7 +115,12 @@ function card(session, ctx, now) {
   head.append(el('div', 'name', session.name || session.sessionId.slice(0, 8)));
   head.append(el('div', `badge s-${session.state}`, stateName(session.state)));
   head.append(el('div', 'caret', '▸'));
-  head.append(el('div', 'project', session.project || session.cwd || ''));
+
+  // 完整工作目录（可点击复制路径）。
+  const cwd = session.cwd || session.project || '';
+  const dir = el('div', 'cwd', cwd);
+  dir.title = cwd;
+  head.append(dir);
 
   if (session.currentTitle || session.lastPrompt) {
     head.append(el('div', 'prompt', session.currentTitle || session.lastPrompt));
@@ -131,6 +136,20 @@ function card(session, ctx, now) {
 
   head.addEventListener('click', () => ctx.onToggle(session.sessionId));
   c.append(head);
+
+  // 「进入」按钮：聚焦该会话的终端（不展开卡片，故 stopPropagation）。
+  // 仅对存活会话显示（DEAD 无意义）。
+  if (session.state !== 'DEAD' && ctx.onFocus) {
+    const actions = el('div', 'card-actions');
+    const enter = el('button', 'btn enter-btn', '⇥ 进入会话');
+    enter.type = 'button';
+    enter.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ctx.onFocus(session.sessionId, enter);
+    });
+    actions.append(enter);
+    c.append(actions);
+  }
 
   if (isOpen) c.append(timelineEl(session, ctx));
   return c;

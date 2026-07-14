@@ -123,6 +123,18 @@ export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
     return { url, ip, port: cfg.port, hasQr: !!svg, svg };
   });
 
+  // —— 进入会话：聚焦其终端标签页（macOS），或降级在 cwd 开新终端 ——
+  // 注意：这是会改动桌面的副作用操作，LAN 模式下亦启用（用户已知悉）。
+  app.post('/api/sessions/:id/focus', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const s = store.get(id);
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    const { focusSession } = await import('./focus.ts');
+    const result = await focusSession(s.pid, s.cwd);
+    if (!result.ok) return reply.code(409).send({ ok: false, reason: result.reason });
+    return { ok: true, method: result.method };
+  });
+
   // —— SSE ——
   app.get('/events', (req, reply) => {
     hub.addClient(reply, store.all(), now());

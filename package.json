@@ -13,7 +13,8 @@
     "dev": "node --watch src/cli.ts start",
     "start": "node src/cli.ts start",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test 'test/**/*.test.ts'"
+    "test": "node --test 'test/**/*.test.ts'",
+    "build:sea": "node scripts/build-sea.mjs"
   },
   "keywords": [
     "claude",
@@ -32,6 +33,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.28.1",
     "typescript": "^5.6.0"
   }
 }

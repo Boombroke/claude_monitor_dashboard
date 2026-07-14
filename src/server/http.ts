@@ -5,20 +5,14 @@
  * （或 ?token= 查询参，方便手机扫码带 token 访问 UI）。loopback 下默认放行。
  */
 
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
-import fastifyStatic from '@fastify/static';
 import type { Config, Session, HookPayload, ServerEvent } from '../types.ts';
 import type { SessionStore } from '../types.ts';
 import { SseHub } from './sse.ts';
+import { isSea, readAsset, contentTypeFor, PUBLIC_ASSETS } from './assets.ts';
 
 /** 供 sse.ts 使用的最小 reply 形状。 */
 export type ServerReply = FastifyReply;
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-/** public/ 位于仓库根，相对 src/server 上溯两级。 */
-const PUBLIC_DIR = join(__dirname, '..', '..', 'public');
 
 /** 历史查询接口（由 db/history.History 实现；此处解耦声明避免直接耦合）。 */
 export interface HistoryProvider {
@@ -61,7 +55,24 @@ export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
   });
 
   // —— 静态 PWA ——
-  await app.register(fastifyStatic, { root: PUBLIC_DIR, prefix: '/' });
+  // 开发模式从磁盘 public/ 读（@fastify/static）；SEA 单文件模式从嵌入资源读。
+  if (isSea()) {
+    // 单文件：为每个已知资源注册路由；`/` → index.html。
+    for (const name of PUBLIC_ASSETS) {
+      const route = name === 'index.html' ? '/' : `/${name}`;
+      app.get(route, async (_req, reply) => {
+        const buf = await readAsset(name);
+        if (!buf) return reply.code(404).send({ error: 'not found' });
+        return reply.header('Content-Type', contentTypeFor(name)).send(buf);
+      });
+    }
+  } else {
+    const { default: fastifyStatic } = await import('@fastify/static');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, join } = await import('node:path');
+    const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'public');
+    await app.register(fastifyStatic, { root: publicDir, prefix: '/' });
+  }
 
   // —— 健康检查 ——
   app.get('/health', async () => ({ ok: true, time: now() }));

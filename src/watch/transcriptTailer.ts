@@ -40,12 +40,16 @@ interface Tracked {
   title?: string;
   lastPrompt?: string;
   assistantSummary?: string;
+  recentReplies: string[]; // 最近 N 条助手回复文本（旧→新，环形）
   model?: string;
   permissionMode?: PermissionMode;
   lastStopReason?: string;
   turnDoneMarkerAt?: number;
   lastRecordAt?: number;
 }
+
+/** 保留最近多少条助手回复。 */
+const RECENT_REPLIES_MAX = 5;
 
 export interface TranscriptTailerOptions {
   onMarkers: (m: TranscriptMarkers) => void;
@@ -118,6 +122,7 @@ export class TranscriptTailer implements Watcher {
       offset: 0,
       partial: Buffer.alloc(0),
       chain: Promise.resolve(),
+      recentReplies: [],
     };
     this.tracked.set(sessionId, t);
     void this.enqueue(sessionId, () => this.bootstrapRead(sessionId));
@@ -343,7 +348,15 @@ export class TranscriptTailer implements Watcher {
                 if (b.type === 'text' && typeof b.text === 'string') texts.push(b.text);
               }
             }
-            if (texts.length > 0) t.assistantSummary = texts.join('\n');
+            if (texts.length > 0) {
+              const joined = texts.join('\n');
+              t.assistantSummary = joined;
+              // 推入最近回复环形缓冲（保留最近 N 条）。
+              t.recentReplies.push(joined);
+              if (t.recentReplies.length > RECENT_REPLIES_MAX) {
+                t.recentReplies.splice(0, t.recentReplies.length - RECENT_REPLIES_MAX);
+              }
+            }
           }
           if (m.stop_reason === 'end_turn') t.turnDoneMarkerAt = tsMs ?? this.now();
         }
@@ -371,6 +384,7 @@ export class TranscriptTailer implements Watcher {
     t.title = undefined;
     t.lastPrompt = undefined;
     t.assistantSummary = undefined;
+    t.recentReplies = [];
     t.model = undefined;
     t.permissionMode = undefined;
     t.lastStopReason = undefined;
@@ -392,6 +406,10 @@ export class TranscriptTailer implements Watcher {
     if (lastPrompt !== undefined) m.lastPrompt = lastPrompt;
     const summary = truncateContext(t.assistantSummary, this.cfg);
     if (summary !== undefined) m.lastAssistantSummary = summary;
+    if (t.recentReplies.length > 0) {
+      // 每条截断（略放宽长度，便于看清"到哪一步"）。
+      m.recentReplies = t.recentReplies.map((r) => truncateContext(r, this.cfg) ?? r);
+    }
 
     if (t.model !== undefined) m.model = t.model;
     if (t.permissionMode !== undefined) m.permissionMode = t.permissionMode;

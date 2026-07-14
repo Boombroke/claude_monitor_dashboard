@@ -143,6 +143,7 @@ export class SessionManager {
     if (markers.lastPrompt !== undefined) patch.lastPrompt = markers.lastPrompt;
     if (markers.lastAssistantSummary !== undefined)
       patch.lastAssistantSummary = markers.lastAssistantSummary;
+    if (markers.recentReplies !== undefined) patch.recentReplies = markers.recentReplies;
     if (markers.model !== undefined) patch.model = markers.model;
     if (markers.gitBranch !== undefined) patch.gitBranch = markers.gitBranch;
     if (markers.permissionMode !== undefined) patch.permissionMode = markers.permissionMode;

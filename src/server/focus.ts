@@ -16,7 +16,7 @@ import { promisify } from 'node:util';
 const execFileP = promisify(execFile);
 
 export type FocusResult =
-  | { ok: true; method: 'focused-tab' | 'opened-new' }
+  | { ok: true; method: 'focused-tab' | 'opened-new' | 'activated-editor' }
   | { ok: false; reason: string };
 
 /** 查询某 pid 的控制终端，返回 /dev/ttysNNN 形式；失败返回 undefined。 */
@@ -30,6 +30,39 @@ async function ttyDevOf(pid: number): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * 沿父进程链向上，判断会话宿主的编辑器/终端类型。
+ * 返回可用 `open -a <name>` 激活的应用名，或 undefined（普通终端）。
+ */
+async function hostEditorApp(pid: number): Promise<string | undefined> {
+  let cur = pid;
+  for (let i = 0; i < 6; i++) {
+    let ppid: string;
+    let comm: string;
+    try {
+      const { stdout } = await execFileP('ps', ['-o', 'ppid=,comm=', '-p', String(cur)], { timeout: 2000 });
+      const line = stdout.trim();
+      const sp = line.indexOf(' ');
+      ppid = sp === -1 ? '' : line.slice(0, sp).trim();
+      comm = sp === -1 ? '' : line.slice(sp + 1).trim();
+    } catch {
+      return undefined;
+    }
+    const lower = comm.toLowerCase();
+    // 常见编辑器集成终端的进程名特征。
+    if (lower.includes('cursor')) return 'Cursor';
+    if (lower.includes('code - insiders') || lower.includes('code-insiders')) return 'Visual Studio Code - Insiders';
+    if (lower.includes('code helper') || lower.includes('visual studio code') || /(^|\/)code($|\s)/.test(lower)) {
+      return 'Visual Studio Code';
+    }
+    if (lower.includes('windsurf')) return 'Windsurf';
+    const next = Number(ppid);
+    if (!Number.isInteger(next) || next <= 1) return undefined;
+    cur = next;
+  }
+  return undefined;
 }
 
 /** AppleScript 字符串转义（双引号与反斜杠）。 */
@@ -78,8 +111,23 @@ async function openNewTerminalAt(cwd: string): Promise<boolean> {
   }
 }
 
+/** 用 `open -a <app> <cwd>` 激活编辑器并聚焦该工作目录窗口。 */
+async function activateEditorAt(app: string, cwd: string): Promise<boolean> {
+  try {
+    const args = cwd && cwd.length > 0 ? ['-a', app, cwd] : ['-a', app];
+    await execFileP('open', args, { timeout: 4000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * 进入会话：聚焦其终端标签页，或降级在其 cwd 开新终端。
+ * 进入会话：
+ *   - 会话在 VS Code / Cursor 等编辑器集成终端里 → 激活该编辑器并聚焦对应
+ *     工作目录窗口（无法精确定位到具体终端面板，属编辑器限制）。
+ *   - 会话在 Terminal.app 里 → 按 TTY 精确聚焦对应标签页。
+ *   - 都不行 → 降级在 cwd 开新终端。
  * pid 可能为 null（会话已无活进程），此时只能靠 cwd 开新终端。
  */
 export async function focusSession(pid: number | null, cwd: string): Promise<FocusResult> {
@@ -87,8 +135,14 @@ export async function focusSession(pid: number | null, cwd: string): Promise<Foc
     return { ok: false, reason: 'unsupported-platform' };
   }
 
-  // 1) 有 pid → 按 TTY 聚焦标签页。
   if (pid !== null) {
+    // 1) 先判断宿主是不是编辑器（VS Code/Cursor 等）。
+    const editor = await hostEditorApp(pid);
+    if (editor) {
+      const activated = await activateEditorAt(editor, cwd);
+      if (activated) return { ok: true, method: 'activated-editor' };
+    }
+    // 2) 否则按 TTY 聚焦 Terminal.app 标签页。
     const ttyDev = await ttyDevOf(pid);
     if (ttyDev) {
       const focused = await focusTerminalTab(ttyDev);
@@ -96,7 +150,7 @@ export async function focusSession(pid: number | null, cwd: string): Promise<Foc
     }
   }
 
-  // 2) 降级：在 cwd 开新终端。
+  // 3) 降级：在 cwd 开新终端。
   if (cwd && cwd.length > 0) {
     const opened = await openNewTerminalAt(cwd);
     if (opened) return { ok: true, method: 'opened-new' };

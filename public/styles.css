@@ -365,6 +365,38 @@ section { margin-bottom: 8px; }
 }
 .enter-btn:disabled { opacity: 0.6; cursor: default; }
 
+/* ——————————————————————————— 最近回复 ——————————————————————————— */
+
+.replies {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px 4px 18px;
+  animation: tl-in 0.3s var(--ease) both;
+}
+.replies-title {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fg-subtle);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.replies-list { display: flex; flex-direction: column; gap: 7px; }
+.reply-item {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--working);
+  border-radius: var(--radius-sm);
+  padding: 8px 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* 最新一条更亮 */
+  animation: tl-item-in 0.3s var(--ease) both;
+}
+.reply-item:first-child { color: var(--fg); border-left-color: var(--done); }
+
 /* ——————————————————————————— 时间线 ——————————————————————————— */
 
 .timeline {

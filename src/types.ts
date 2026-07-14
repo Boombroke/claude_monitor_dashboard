@@ -73,6 +73,7 @@ export interface Session {
   currentTitle?: string; // ai-title.aiTitle
   lastPrompt?: string; // last-prompt.lastPrompt（截断）
   lastAssistantSummary?: string; // away_summary / 末条文本（截断）
+  recentReplies?: string[]; // 最近 N 条助手回复文本（截断，旧→新），看"AI 到哪一步了"
   model?: string; // assistant.message.model
 
   // —— 时间 ——
@@ -135,6 +136,7 @@ export interface TranscriptMarkers {
   currentTitle?: string; // ai-title
   lastPrompt?: string; // last-prompt（截断）
   lastAssistantSummary?: string; // away_summary / 末条 text（截断）
+  recentReplies?: string[]; // 最近 N 条助手回复文本（截断，旧→新）
   model?: string;
   permissionMode?: PermissionMode; // 来自 permission-mode 记录
   /** 末条 assistant 记录的 stop_reason（判断 tool_use 在飞 vs end_turn）。 */

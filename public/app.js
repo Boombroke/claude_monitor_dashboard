@@ -87,7 +87,12 @@ async function focusSession(id, btn) {
     const data = await res.json().catch(() => ({}));
     if (btn) {
       if (res.ok && data.ok) {
-        btn.textContent = data.method === 'opened-new' ? '已开新终端' : '已切换 ✓';
+        const label = {
+          'opened-new': '已开新终端',
+          'activated-editor': '已切到编辑器',
+          'focused-tab': '已切换 ✓',
+        };
+        btn.textContent = label[data.method] || '已切换 ✓';
       } else {
         btn.textContent = '未找到终端';
       }

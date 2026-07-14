@@ -179,8 +179,30 @@ function card(session, ctx, now) {
     c.append(actions);
   }
 
-  if (isOpen) c.append(timelineEl(session, ctx));
+  if (isOpen) {
+    c.append(repliesEl(session)); // 「最近回复」——AI 到哪一步了
+    c.append(timelineEl(session, ctx));
+  }
   return c;
+}
+
+/** 渲染「最近回复」块：最近 N 条助手消息（新→旧），看 AI 进行到哪一步。 */
+function repliesEl(session) {
+  const replies = session.recentReplies || [];
+  const box = el('div', 'replies');
+  const title = el('div', 'replies-title', '最近回复');
+  box.append(title);
+  if (replies.length === 0) {
+    box.append(el('div', 'tl-msg', '暂无回复记录'));
+    return box;
+  }
+  const list = el('div', 'replies-list');
+  // 最新在上。
+  for (const text of [...replies].reverse()) {
+    list.append(el('div', 'reply-item', text));
+  }
+  box.append(list);
+  return box;
 }
 
 /**

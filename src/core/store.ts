@@ -164,6 +164,7 @@ export class InMemorySessionStore implements SessionStore {
       'currentTitle',
       'lastPrompt',
       'lastAssistantSummary',
+      'recentReplies',
       'model',
       'attentionReason',
     ];

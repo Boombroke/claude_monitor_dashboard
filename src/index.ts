@@ -11,6 +11,7 @@ import { DefaultReconciler } from './core/reconciler.ts';
 import { SessionManager } from './core/manager.ts';
 import { SessionsWatcher } from './watch/sessionsWatcher.ts';
 import { TranscriptTailer } from './watch/transcriptTailer.ts';
+import { SubagentWatcher } from './watch/subagentWatcher.ts';
 import { LivenessReaper } from './core/liveness.ts';
 import { SseHub } from './server/sse.ts';
 import { createHttpServer } from './server/http.ts';
@@ -43,6 +44,11 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
     onMarkers: (markers) => manager.onMarkers(markers),
   });
 
+  // 子代理/workflow 遥测采集：token 足迹 + workflow 活动。
+  const subagents = new SubagentWatcher(cfg, {
+    onStats: (s) => manager.onSubagentStats(s),
+  });
+
   // 通知渠道：桌面（受配置开关）+ ntfy（仅当配置了 topic）。
   const channels: NotificationChannel[] = [new DesktopChannel(cfg.desktopNotifications)];
   if (cfg.ntfy) {
@@ -70,8 +76,14 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
     reconciler,
     notifier,
     broadcast: (event) => hub.broadcast(event),
-    onTrack: (sessionId, sessionCwd) => tailer.track(sessionId, sessionCwd),
-    onUntrack: (sessionId) => tailer.untrack(sessionId),
+    onTrack: (sessionId, sessionCwd) => {
+      tailer.track(sessionId, sessionCwd);
+      subagents.track(sessionId, sessionCwd);
+    },
+    onUntrack: (sessionId) => {
+      tailer.untrack(sessionId);
+      subagents.untrack(sessionId);
+    },
     onStateTransition: (session, from) =>
       history?.recordTransition(session.sessionId, session.stateSince, from, session.state, session.attentionReason),
   });
@@ -98,6 +110,7 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
   });
 
   await tailer.start();
+  await subagents.start();
   await watcher.start();
   reaper.start();
   const url = await http.listen();
@@ -108,6 +121,7 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
       reaper.stop();
       await watcher.stop();
       await tailer.stop();
+      await subagents.stop();
       await http.close();
       history?.close();
     },

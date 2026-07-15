@@ -170,6 +170,12 @@ export class InMemorySessionStore implements SessionStore {
       'effort',
       'effortSource',
       'ultracode',
+      'subagentTokens',
+      'agentCount',
+      'workflowCount',
+      'workflowAgentCount',
+      'lastWorkflowAt',
+      'workflowActive',
       'model',
       'attentionReason',
     ];

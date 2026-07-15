@@ -375,6 +375,47 @@ section { margin-bottom: 8px; }
 .ctx-pct { color: var(--fg-muted); font-weight: 600; }
 .ctx.lvl-danger .ctx-pct { color: var(--approval); }
 
+/* —— 子代理累计足迹 pill（累计消耗，非当前上下文，无进度条）—— */
+.ctx-sub {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+}
+.ctx-sub-label { color: var(--fg-muted); }
+.ctx-sub-count { color: var(--fg-subtle); }
+
+/* —— workflow 编排活动 chip（客观事实，非状态）—— */
+.card .meta .wf {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.card .meta .wf.wf-active {
+  border-color: rgba(59, 130, 246, 0.3);
+  color: var(--working);
+}
+.card .meta .wf.wf-active::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--working);
+  box-shadow: 0 0 6px var(--working);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+  flex: none;
+}
+
 /* ——————————————————————————— 徽章 ——————————————————————————— */
 
 .badge {

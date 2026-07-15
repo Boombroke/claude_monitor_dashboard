@@ -25,6 +25,7 @@ import type {
   ServerEvent,
   Session,
   SessionState,
+  SubagentStats,
 } from '../types.ts';
 
 export interface ManagerDeps {
@@ -194,6 +195,20 @@ export class SessionManager {
     if (payload.cwd) this.maybeTrack(sid, payload.cwd);
     // hook 驱动的状态（尤其 NEEDS_APPROVAL/DONE）立即生效，不去抖。
     this.recompute(sid, /*immediate*/ true);
+  }
+
+  /** 来自 SubagentWatcher 的子代理/workflow 遥测——纯展示，直接 upsert 不进 reconcile。 */
+  onSubagentStats(s: SubagentStats): void {
+    if (!this.store.get(s.sessionId)) return; // 会话尚未建立则忽略（下次 sweep 再来）
+    const patch: Partial<Session> = {
+      subagentTokens: s.subagentTokens,
+      agentCount: s.agentCount,
+      workflowCount: s.workflowCount,
+      workflowAgentCount: s.workflowAgentCount,
+      workflowActive: s.workflowActive,
+    };
+    if (s.lastWorkflowAt !== undefined) patch.lastWorkflowAt = s.lastWorkflowAt;
+    this.store.upsert(s.sessionId, patch);
   }
 
   /** 来自 reaper 的判死。 */

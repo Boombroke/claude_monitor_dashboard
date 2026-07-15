@@ -81,6 +81,14 @@ export interface Session {
   effortSource?: 'hook' | 'echo' | 'default'; // effort 来源
   ultracode?: boolean; // 是否 ultracode（仅由主链 /effort 回显判定；hook 无法区分）
 
+  // —— 子代理 / workflow 遥测（纯累计事实，非当前上下文；SubagentWatcher 采集）——
+  subagentTokens?: number; // 子代理（含 workflow 内）累计上下文足迹 = Σ 各 agent 峰值
+  agentCount?: number; // 参与过的子代理总数（顶层 + workflow 内）
+  workflowCount?: number; // workflow 运行次数（wf_* 目录数，跨 slug 去重）
+  workflowAgentCount?: number; // workflow 内的子代理数
+  lastWorkflowAt?: number; // 最近 workflow 活动 epoch ms
+  workflowActive?: boolean; // 疑似进行中（尽力而为，基于 mtime 新鲜度）
+
   // —— 时间 ——
   startedAt: number; // epoch ms
   lastActivityAt: number; // max(statusUpdatedAt, updatedAt, 末条记录 ts)
@@ -173,6 +181,17 @@ export interface LivenessInfo {
   pid: number;
   alive: boolean;
   tty?: string; // ps -p <pid> -o tty=（存在感抑制用）
+}
+
+/** 子代理 / workflow 遥测快照（SubagentWatcher 产出 → manager.onSubagentStats）。 */
+export interface SubagentStats {
+  sessionId: string;
+  subagentTokens: number;
+  agentCount: number;
+  workflowCount: number;
+  workflowAgentCount: number;
+  lastWorkflowAt?: number;
+  workflowActive: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

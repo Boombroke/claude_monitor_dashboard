@@ -86,6 +86,13 @@ export function fmtClock(ms) {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+/** epoch ms → "HH:MM"（本地时区）。 */
+export function fmtHHMM(ms) {
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 export function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -210,11 +217,16 @@ function card(session, ctx, now) {
   if (session.model) meta.append(el('span', '', session.model));
   if (session.gitBranch) meta.append(el('span', '', `⎇ ${session.gitBranch}`));
   if (session.pid) meta.append(el('span', '', `pid ${session.pid}`));
+  const wf = wfEl(session);
+  if (wf) meta.append(wf);
   head.append(meta);
 
   // 上下文用量条（收起态也可见，监控核心）。
   const ctxBar = ctxEl(session);
   if (ctxBar) head.append(ctxBar);
+  // 子代理累计足迹（独占一行，不塞进 ctx 横向 flex）。
+  const sub = subFootprintEl(session);
+  if (sub) head.append(sub);
 
   head.addEventListener('click', () => ctx.onToggle(session.sessionId));
   c.append(head);
@@ -278,6 +290,38 @@ function ctxEl(session) {
   label.append(el('span', 'ctx-pct', `${pct}%`));
   box.append(track, label);
   return box;
+}
+
+/** 子代理累计足迹：文本 pill，非进度条——"帮手烧了多少"，非当前上下文。 */
+function subFootprintEl(session) {
+  if (!session.subagentTokens) return null; // 0/undefined → 不渲染，优雅降级
+  const box = el('div', 'ctx-sub');
+  box.append(el('span', 'ctx-sub-label', `子代理 +${fmtTokens(session.subagentTokens)}`));
+  if (session.agentCount) box.append(el('span', 'ctx-sub-count', `${session.agentCount} agents`));
+  const total = (session.contextTokens || 0) + session.subagentTokens;
+  box.title =
+    `子代理累计上下文足迹 ${fmtTokens(session.subagentTokens)}（${session.agentCount || 0} 个 agent）\n` +
+    `= 各子代理峰值上下文之和，累计消耗，非当前占用。\n` +
+    `本轮总消耗 ≈ ${fmtTokens(total)}（主链当前 ${fmtTokens(session.contextTokens || 0)} + 子代理累计）`;
+  return box;
+}
+
+/** workflow 编排活动 chip：纯客观事实，绝不暗示 ultracode。 */
+function wfEl(session) {
+  if (!session.workflowCount) return null;
+  const parts = [`⛓ workflow ${session.workflowCount} 次`];
+  if (session.workflowAgentCount) parts.push(`${session.workflowAgentCount} agents`);
+  if (session.lastWorkflowAt) parts.push(`最近 ${fmtHHMM(session.lastWorkflowAt)}`);
+  const span = el(
+    'span',
+    'wf' + (session.workflowActive ? ' wf-active' : ''),
+    parts.join(' · ') + (session.workflowActive ? ' · 进行中' : ''),
+  );
+  span.title =
+    `该会话累计发起 ${session.workflowCount} 次 workflow 编排，共 ${session.workflowAgentCount || 0} 个子代理` +
+    (session.lastWorkflowAt ? `；最近活动 ${fmtClock(session.lastWorkflowAt)}` : '') +
+    `（客观运行记录，与推理档位无关）`;
+  return span;
 }
 
 /** 渲染「最近回复」块：最近 N 条助手消息（新→旧），看 AI 进行到哪一步。 */

@@ -77,8 +77,9 @@ export interface Session {
   model?: string; // assistant.message.model
   contextTokens?: number; // 当前上下文占用 token（= usage 四项之和）
   contextWindow?: number; // 推断的上下文窗口上限（200000 | 1000000）
-  effort?: string; // 推理强度 low/medium/high/xhigh（hook 优先，全局默认兜底）
-  effortSource?: 'hook' | 'default'; // effort 来源
+  effort?: string; // 推理强度 low/medium/high/xhigh/max（hook 优先，echo 次之，全局默认兜底）
+  effortSource?: 'hook' | 'echo' | 'default'; // effort 来源
+  ultracode?: boolean; // 是否 ultracode（仅由主链 /effort 回显判定；hook 无法区分）
 
   // —— 时间 ——
   startedAt: number; // epoch ms
@@ -147,6 +148,8 @@ export interface TranscriptMarkers {
   permissionMode?: PermissionMode; // 来自 permission-mode 记录
   /** 末条 assistant 记录的 stop_reason（判断 tool_use 在飞 vs end_turn）。 */
   lastStopReason?: 'end_turn' | 'tool_use' | string;
+  /** 主链末次 /effort 命令回显的原始档名（ultracode/xhigh/max/high/…）；用于区分 ultracode。 */
+  effortEcho?: string;
   /** 是否出现了「一轮完成」标记（turn_duration / away_summary / end_turn）。 */
   turnDoneMarkerAt?: number; // epoch ms，最近一次完成标记时间
   lastRecordAt?: number; // 末条记录时间戳 epoch ms

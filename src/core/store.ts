@@ -169,6 +169,7 @@ export class InMemorySessionStore implements SessionStore {
       'contextWindow',
       'effort',
       'effortSource',
+      'ultracode',
       'model',
       'attentionReason',
     ];

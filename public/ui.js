@@ -171,13 +171,19 @@ function card(session, ctx, now) {
 
   const head = el('div', 'card-head');
   head.append(el('div', 'name', session.name || session.sessionId.slice(0, 8)));
-  if (effort) {
+  // ultracode 独立徽章（唯一由 /effort 回显判定；hook 无法区分 ultracode/xhigh）。
+  if (session.ultracode) {
+    c.classList.add('e-ultra');
+    const ub = el('div', 'effort ultracode', '⚡ULTRA');
+    ub.title = 'ultracode：xhigh + 动态 workflow 编排（来自 /effort 回显）';
+    head.append(ub);
+  } else if (effort) {
     const eb = el('div', `effort e-${effort}`, EFFORT_LABEL[effort] || effort);
     if (session.effortSource === 'default') {
       eb.classList.add('effort-default');
       eb.title = '全局默认值（未收到该会话的 hook；装 hook 可显示真实值）';
     } else {
-      eb.title = '推理强度：' + effort;
+      eb.title = '推理强度：' + effort + '（来自 ' + (session.effortSource === 'echo' ? '/effort 回显' : 'hook') + '）';
     }
     head.append(eb);
   }

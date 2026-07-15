@@ -47,6 +47,30 @@ interface Tracked {
   turnDoneMarkerAt?: number;
   lastRecordAt?: number;
   contextTokens?: number; // 最新主链 assistant usage 四项之和 = 当前上下文占用
+  effortEcho?: string; // 主链末次 /effort 回显的档名（ultracode/xhigh/max/…）
+  echoScanned?: boolean; // 是否已做过一次性全文回填扫描
+}
+
+/** /effort 命令回显文本的短语锚点（用于快速字节查找）。 */
+const EFFORT_ECHO_PHRASE = 'Set effort level to ';
+
+/**
+ * 从一条记录里提取主链 /effort 回显档名。
+ * 形态：{type:"user", isSidechain!==true, message.content 为字符串且含 "Set effort level to X"}。
+ * 子代理/tool-result 里的假回显（message.content 是数组）天然被排除。
+ * 返回档名（小写原样，如 "ultracode"/"xhigh"/"max"）或 undefined。
+ */
+export function extractEffortEcho(rec: unknown): string | undefined {
+  if (rec === null || typeof rec !== 'object') return undefined;
+  const r = rec as Record<string, unknown>;
+  if (r.type !== 'user' || r.isSidechain === true) return undefined;
+  const msg = r.message;
+  if (msg === null || typeof msg !== 'object') return undefined;
+  const content = (msg as Record<string, unknown>).content;
+  if (typeof content !== 'string') return undefined;
+  if (!content.includes(EFFORT_ECHO_PHRASE)) return undefined;
+  const m = content.match(/Set effort level to (\w+)/);
+  return m && m[1] ? m[1].toLowerCase() : undefined;
 }
 
 /** 保留最近多少条助手回复。 */
@@ -173,6 +197,9 @@ export class TranscriptTailer implements Watcher {
     };
     this.tracked.set(sessionId, t);
     void this.enqueue(sessionId, () => this.bootstrapRead(sessionId));
+    // 一次性全文回填 /effort 回显：echo 可能距文件尾很远（实测数 MB），
+    // 64KB bootstrap 会漏采存量会话，故做定向字节扫描补回。
+    void this.enqueue(sessionId, () => this.scanEffortEcho(sessionId));
   }
 
   /** 停止尾读该会话。 */
@@ -286,6 +313,67 @@ export class TranscriptTailer implements Watcher {
     this.emit(sessionId, t);
   }
 
+  /**
+   * 一次性全文扫描，回填主链末次 /effort 回显（bootstrap 64KB 会漏采远离尾部的 echo）。
+   * 用带重叠的分块字节查找短语，仅对命中短语的行做 JSON.parse——避免逐行解析整个大文件。
+   * 只跑一次（echoScanned 标记）；增量路径之后免费捕获新的 echo。
+   */
+  private async scanEffortEcho(sessionId: string): Promise<void> {
+    const t = this.tracked.get(sessionId);
+    if (!t || t.echoScanned) return;
+    if (t.path === undefined) t.path = await this.resolvePath(sessionId, t.cwd);
+    if (t.path === undefined) return; // 文件未出现，下次 track/事件再试（不置 scanned）
+    t.echoScanned = true;
+
+    const CHUNK = 1 << 20; // 1MB
+    const OVERLAP = 4096; // 覆盖跨块边界的行
+    let fh;
+    try {
+      fh = await open(t.path, 'r');
+    } catch {
+      return;
+    }
+    try {
+      const st = await fh.stat();
+      const size = st.size;
+      let pos = 0;
+      let carry = Buffer.alloc(0); // 上一块末尾未成行的残片
+      let lastEcho: string | undefined;
+      while (pos < size) {
+        const len = Math.min(CHUNK, size - pos);
+        const buf = Buffer.alloc(len);
+        await fh.read(buf, 0, len, pos);
+        pos += len;
+        const combined = carry.length > 0 ? Buffer.concat([carry, buf]) : buf;
+        // 只在含短语时才切行解析。
+        if (combined.includes(EFFORT_ECHO_PHRASE)) {
+          const lastNl = combined.lastIndexOf(NL);
+          const text = (lastNl === -1 ? combined : combined.subarray(0, lastNl)).toString('utf8');
+          for (const line of text.split('\n')) {
+            if (!line.includes(EFFORT_ECHO_PHRASE)) continue;
+            try {
+              const echo = extractEffortEcho(JSON.parse(line));
+              if (echo !== undefined) lastEcho = echo; // latest-wins
+            } catch {
+              /* 半行/损坏，跳过 */
+            }
+          }
+        }
+        // 留末尾 OVERLAP 字节作 carry，防止行被块边界截断。
+        carry = combined.length > OVERLAP ? Buffer.from(combined.subarray(combined.length - OVERLAP)) : combined;
+      }
+      // 仅当增量尚未捕获到更新的 echo 时才回填（不覆盖已有值）。
+      if (lastEcho !== undefined && t.effortEcho === undefined) {
+        t.effortEcho = lastEcho;
+        this.emit(sessionId, t);
+      }
+    } catch {
+      /* 扫描失败：忽略，增量路径仍可捕获后续 echo */
+    } finally {
+      await fh.close();
+    }
+  }
+
   /** 增量读：从 offset 到 EOF；size < offset 视为截断 → 归零重扫。 */
   private async readIncremental(sessionId: string): Promise<void> {
     const t = this.tracked.get(sessionId);
@@ -367,6 +455,14 @@ export class TranscriptTailer implements Watcher {
     if (typeof r.cwd === 'string' && r.cwd.length > 0) t.recordCwd = r.cwd;
     if (typeof r.gitBranch === 'string' && r.gitBranch.length > 0) t.gitBranch = r.gitBranch;
 
+    // /effort 命令回显（主链 user 记录）：区分 ultracode/xhigh 的唯一可靠信号，latest-wins。
+    // 提前拦截并 return，避免这条 user 记录落入下方 assistant/文本处理污染 recentReplies。
+    const echo = extractEffortEcho(rec);
+    if (echo !== undefined) {
+      t.effortEcho = echo;
+      return;
+    }
+
     switch (type) {
       case 'ai-title': {
         if (typeof r.aiTitle === 'string') t.title = r.aiTitle;
@@ -444,6 +540,8 @@ export class TranscriptTailer implements Watcher {
     t.turnDoneMarkerAt = undefined;
     t.lastRecordAt = undefined;
     t.contextTokens = undefined;
+    // 注意：不清 effortEcho —— /effort 设定跨 compaction/轮转持续有效，
+    // 清掉会在下次 /effort 前丢失 ultracode 状态。
   }
 
   /** 由累积状态构造对外的 TranscriptMarkers（在此处截断上下文字段），并回调。 */
@@ -471,6 +569,7 @@ export class TranscriptTailer implements Watcher {
       m.contextWindow = inferContextWindow(t.model, t.contextTokens);
     }
     if (t.permissionMode !== undefined) m.permissionMode = t.permissionMode;
+    if (t.effortEcho !== undefined) m.effortEcho = t.effortEcho;
     if (t.lastStopReason !== undefined) m.lastStopReason = t.lastStopReason;
     if (t.turnDoneMarkerAt !== undefined) m.turnDoneMarkerAt = t.turnDoneMarkerAt;
     if (t.lastRecordAt !== undefined) m.lastRecordAt = t.lastRecordAt;

@@ -149,6 +149,16 @@ export class SessionManager {
     if (markers.contextWindow !== undefined) patch.contextWindow = markers.contextWindow;
     if (markers.gitBranch !== undefined) patch.gitBranch = markers.gitBranch;
     if (markers.permissionMode !== undefined) patch.permissionMode = markers.permissionMode;
+    // /effort 回显：唯一能区分 ultracode 的信号（hook 把 ultracode 报成 xhigh）。
+    if (markers.effortEcho !== undefined) {
+      patch.ultracode = markers.effortEcho === 'ultracode';
+      // effort 档位优先级 hook > echo > default：仅当当前不是 hook 来源时，用 echo 值。
+      const cur = this.store.get(markers.sessionId);
+      if (cur?.effortSource !== 'hook') {
+        patch.effort = markers.effortEcho; // 原始档名，前端 normEffort 归一（ultracode→xhigh）
+        patch.effortSource = 'echo';
+      }
+    }
     if (Object.keys(patch).length > 0 && this.store.get(markers.sessionId)) {
       this.store.upsert(markers.sessionId, patch);
     }

@@ -16,13 +16,15 @@ export const EFFORT_LABEL = {
   medium: 'MED',
   high: 'HIGH',
   xhigh: 'XHIGH',
+  max: 'MAX',
 };
 
-/** 归一化 effort 取值：ultracode/max 归到 xhigh，其余小写匹配已知档。 */
+/** 归一化 effort 取值：ultracode→xhigh；max 为独立最高档；其余小写匹配已知档。 */
 export function normEffort(v) {
   if (!v) return null;
   const s = String(v).toLowerCase();
-  if (s === 'ultracode' || s === 'max' || s === 'xhigh') return 'xhigh';
+  if (s === 'max') return 'max';
+  if (s === 'ultracode' || s === 'xhigh') return 'xhigh';
   if (s === 'high') return 'high';
   if (s === 'medium' || s === 'med') return 'medium';
   if (s === 'low') return 'low';

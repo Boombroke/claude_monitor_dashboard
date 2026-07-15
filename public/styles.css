@@ -416,6 +416,18 @@ section { margin-bottom: 8px; }
   border-color: rgba(251, 146, 60, 0.5);
   box-shadow: 0 0 10px rgba(251, 146, 60, 0.25);
 }
+/* max：最高档，紫红渐变 + 流光文字 + 呼吸辉光 */
+.effort.e-max {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(168, 85, 247, 0.25));
+  color: #f0abfc;
+  border-color: rgba(217, 70, 239, 0.6);
+  box-shadow: 0 0 12px rgba(217, 70, 239, 0.35);
+  animation: max-badge-pulse 2s var(--ease-io) infinite;
+}
+@keyframes max-badge-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(217, 70, 239, 0.25); }
+  50%      { box-shadow: 0 0 16px rgba(217, 70, 239, 0.5); }
+}
 /* 全局默认值：虚线边框 + 降透明，暗示"非精确" */
 .effort.effort-default { border-style: dashed; opacity: 0.7; }
 
@@ -451,6 +463,27 @@ section { margin-bottom: 8px; }
   100% { background-position: -200% 0; }
 }
 /* WORKING + xhigh 叠加时，动效并存（work-glow 已在，sweep 由 ::after 独立） */
+
+/* max：最强——紫红顶部流光 + 更强边光呼吸 */
+.card.e-max {
+  border-color: rgba(217, 70, 239, 0.45);
+  animation: card-in 0.4s var(--ease) both, max-glow 3s var(--ease-io) infinite;
+}
+.card.e-max::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ef4444, #d946ef, #a855f7, #d946ef, #ef4444, transparent);
+  background-size: 200% 100%;
+  animation: xhigh-sweep 2.2s linear infinite;
+  pointer-events: none;
+  opacity: 0.85;
+}
+@keyframes max-glow {
+  0%, 100% { box-shadow: var(--shadow-card), 0 0 0 0 rgba(217, 70, 239, 0); }
+  50%      { box-shadow: var(--shadow-card), 0 0 20px 0 rgba(217, 70, 239, 0.22); }
+}
 
 /* ——————————————————————————— 进入按钮 ——————————————————————————— */
 

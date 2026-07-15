@@ -160,20 +160,26 @@ export class SessionManager {
     const sid = payload.session_id;
     const r = this.rawOf(sid);
     r.hook = { payload, at: this.now() };
-    // hook 可能先于文件出现该会话；确保 store 有占位。
+    // hook 携带的 effort.level（Stop/PreToolUse/PostToolUse/SubagentStop 带），
+    // 是该会话「当前 turn」的真实推理强度——中途 /effort 改档后下个 turn 即反映。
+    const hookEffort = payload.effort?.level;
+    // hook 可能先于文件出现该会话；确保 store 有占位（并把 effort 一并带入，避免丢失）。
     if (!this.store.get(sid)) {
       this.store.upsert(sid, {
         cwd: payload.cwd ?? '',
         project: payload.cwd ? basename(payload.cwd) : '',
         ...(payload.permission_mode ? { permissionMode: payload.permission_mode } : {}),
+        ...(hookEffort ? { effort: hookEffort, effortSource: 'hook' as const } : {}),
       });
-    } else if (payload.permission_mode) {
-      this.store.upsert(sid, { permissionMode: payload.permission_mode });
-    }
-    // hook 携带的 effort.level 为该会话的真实推理强度（覆盖全局默认兜底）。
-    const hookEffort = payload.effort?.level;
-    if (hookEffort && this.store.get(sid)) {
-      this.store.upsert(sid, { effort: hookEffort, effortSource: 'hook' });
+    } else {
+      const patch: Partial<Session> = {};
+      if (payload.permission_mode) patch.permissionMode = payload.permission_mode;
+      // hook 真实 effort 覆盖全局默认兜底。
+      if (hookEffort) {
+        patch.effort = hookEffort;
+        patch.effortSource = 'hook';
+      }
+      if (Object.keys(patch).length > 0) this.store.upsert(sid, patch);
     }
     if (payload.cwd) this.maybeTrack(sid, payload.cwd);
     // hook 驱动的状态（尤其 NEEDS_APPROVAL/DONE）立即生效，不去抖。

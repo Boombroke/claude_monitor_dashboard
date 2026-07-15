@@ -6,48 +6,102 @@
     <title>ccmon · 手机配对</title>
     <link rel="stylesheet" href="/styles.css" />
     <style>
-      .pair-wrap { max-width: 420px; margin: 40px auto; text-align: center; padding: 0 20px; }
-      .pair-wrap h1 { font-size: 20px; }
-      .pair-hint { color: var(--muted); font-size: 13px; margin: 8px 0 24px; }
-      .qr-box { background: #fff; padding: 16px; border-radius: 12px; display: inline-block; }
-      .qr-box svg { display: block; width: 260px; height: 260px; }
-      .pair-url {
-        margin-top: 20px; font-size: 12px; color: var(--muted);
-        word-break: break-all; background: var(--panel);
-        border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+      .pair-wrap { max-width: 460px; margin: 32px auto; padding: 0 20px; }
+      .pair-wrap h1 { font-size: 20px; text-align: center; }
+      .pair-sec {
+        background: var(--bg-elev, #18181b);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px;
+        margin: 18px 0;
+        text-align: center;
       }
-      .pair-err { color: var(--approval); margin-top: 24px; }
+      .pair-sec h2 { font-size: 15px; margin: 0 0 6px; }
+      .pair-hint { color: var(--fg-muted, #a1a1aa); font-size: 12.5px; margin: 6px 0 16px; line-height: 1.6; }
+      .qr-box { background: #fff; padding: 14px; border-radius: 12px; display: inline-block; }
+      .qr-box svg { display: block; width: 220px; height: 220px; }
+      .qr-row { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+      .qr-cell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+      .qr-cap { font-size: 11.5px; color: var(--fg-subtle, #71717a); }
+      .qr-cap b { color: var(--fg, #fafafa); }
+      .pair-url {
+        margin-top: 14px; font-size: 11.5px; color: var(--fg-subtle, #71717a);
+        word-break: break-all; background: var(--bg, #09090b);
+        border: 1px solid var(--border); border-radius: 8px; padding: 9px; font-family: ui-monospace, monospace;
+      }
+      .pair-err { color: var(--approval, #f59e0b); font-size: 13px; }
+      .btn {
+        background: var(--bg, #09090b); color: var(--fg, #fafafa);
+        border: 1px solid var(--border); border-radius: 8px;
+        padding: 8px 16px; font-size: 13px; cursor: pointer; margin-top: 12px;
+      }
+      .btn:hover { border-color: var(--border-hover, #3f3f46); }
+      .steps { text-align: left; font-size: 12.5px; color: var(--fg-muted, #a1a1aa); line-height: 1.8; margin: 8px 0 0; padding-left: 20px; }
+      .steps code { background: var(--bg, #09090b); padding: 1px 5px; border-radius: 4px; }
     </style>
   </head>
   <body>
     <div class="pair-wrap">
       <h1>📱 手机配对</h1>
-      <div class="pair-hint">用手机相机或浏览器扫描二维码，在同一 WiFi 下打开 ccmon 面板。</div>
-      <div id="content"><div class="pair-hint">加载中…</div></div>
+      <div id="ntfy-sec" class="pair-sec"><div class="pair-hint">加载 ntfy 通知配对…</div></div>
+      <div id="lan-sec" class="pair-sec"><div class="pair-hint">加载局域网面板配对…</div></div>
     </div>
     <script type="module">
       const token = new URLSearchParams(location.search).get('token');
-      const url = '/api/pairing' + (token ? '?token=' + encodeURIComponent(token) : '');
-      const content = document.getElementById('content');
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(String(res.status));
-        const data = await res.json();
-        content.innerHTML = '';
-        if (data.svg) {
-          const box = document.createElement('div');
-          box.className = 'qr-box';
-          box.innerHTML = data.svg;
-          content.append(box);
+      const withTok = (p) => p + (token ? (p.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token) : '');
+      const qrBox = (svg) => `<div class="qr-box">${svg}</div>`;
+
+      // —— ntfy 手机通知（扫码一键订阅）——
+      (async () => {
+        const sec = document.getElementById('ntfy-sec');
+        try {
+          const d = await (await fetch(withTok('/api/ntfy-pairing'))).json();
+          if (!d.enabled) {
+            sec.innerHTML =
+              '<h2>🔔 手机通知（ntfy）</h2>' +
+              '<div class="pair-hint">未启用。用 <code>ccmon start --ntfy</code> 启动即可自动生成一个专属通知频道，回到本页扫码订阅。</div>';
+            return;
+          }
+          let html = '<h2>🔔 手机通知（ntfy）</h2>';
+          html += '<div class="pair-hint">先在手机装 <b>ntfy</b> App，再扫下方二维码即可订阅。会话「需要你」时手机就响。</div>';
+          html += '<div class="qr-row">';
+          if (d.deepQr) html += `<div class="qr-cell">${qrBox(d.deepQr)}<div class="qr-cap"><b>一扫即订阅</b><br>(ntfy App 扫)</div></div>`;
+          if (d.webQr) html += `<div class="qr-cell">${qrBox(d.webQr)}<div class="qr-cap">相机扫这个<br>(打开网页点订阅)</div></div>`;
+          html += '</div>';
+          html += `<div class="pair-url">频道 topic：${d.topic}</div>`;
+          html += '<button class="btn" id="test-btn">发送测试推送</button>';
+          html += '<ol class="steps"><li>手机装 ntfy App（App Store / Play 商店搜 ntfy）</li>' +
+            '<li>用 App 内的扫码或相机扫左侧二维码 → 自动订阅；若相机不认，扫右侧网页码，打开后点 Subscribe</li>' +
+            '<li>点「发送测试推送」，手机应收到一条 ✅</li></ol>';
+          sec.innerHTML = html;
+          document.getElementById('test-btn').addEventListener('click', async (e) => {
+            e.target.disabled = true; e.target.textContent = '发送中…';
+            try {
+              const r = await (await fetch(withTok('/api/ntfy-test'), { method: 'POST' })).json();
+              e.target.textContent = r.ok ? '已发送 ✓ 看手机' : '发送失败';
+            } catch { e.target.textContent = '发送失败'; }
+            setTimeout(() => { e.target.disabled = false; e.target.textContent = '发送测试推送'; }, 2500);
+          });
+        } catch {
+          sec.innerHTML = '<h2>🔔 手机通知（ntfy）</h2><div class="pair-err">无法获取 ntfy 配对信息。</div>';
         }
-        const u = document.createElement('div');
-        u.className = 'pair-url';
-        u.textContent = data.url;
-        content.append(u);
-      } catch (e) {
-        content.innerHTML =
-          '<div class="pair-err">未启用局域网模式或无法获取配对信息。<br>用 <code>ccmon start --lan --token &lt;token&gt;</code> 启动。</div>';
-      }
+      })();
+
+      // —— 局域网面板访问 ——
+      (async () => {
+        const sec = document.getElementById('lan-sec');
+        try {
+          const d = await (await fetch(withTok('/api/pairing'))).json();
+          let html = '<h2>🖥 局域网看板</h2>';
+          html += '<div class="pair-hint">同一 WiFi 下，手机扫码用浏览器打开完整看板。</div>';
+          if (d.svg) html += qrBox(d.svg);
+          html += `<div class="pair-url">${d.url}</div>`;
+          sec.innerHTML = html;
+        } catch {
+          sec.innerHTML =
+            '<h2>🖥 局域网看板</h2><div class="pair-hint">未启用局域网。用 <code>ccmon start --lan --token &lt;token&gt;</code> 启动。</div>';
+        }
+      })();
     </script>
   </body>
 </html>

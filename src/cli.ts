@@ -49,6 +49,9 @@ function parseArgs(argv: string[]): ParsedArgs {
       case '--ntfy-topic':
         overrides.ntfyTopic = rest[++i];
         break;
+      case '--ntfy':
+        flags.add('ntfy'); // 启用 ntfy，无 topic 时自动生成并持久化
+        break;
       default:
         flags.add(a);
     }
@@ -58,10 +61,18 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 async function main(): Promise<void> {
   const { command, overrides, flags } = parseArgs(process.argv.slice(2));
-  const cfg = loadConfig(overrides);
+  let cfg = loadConfig(overrides);
 
   switch (command) {
     case 'start': {
+      // --ntfy 启用手机推送但没给 topic → 自动生成一个高熵 topic 并持久化，
+      // 之后手机订阅稳定不变，不用每次记 topic 名。
+      if (flags.has('ntfy') && !cfg.ntfy) {
+        const { generateNtfyTopic, saveUserConfig } = await import('./config.ts');
+        const topic = generateNtfyTopic();
+        saveUserConfig({ ntfy: { server: 'https://ntfy.sh', topic, includeContext: false } });
+        cfg = loadConfig(overrides); // 重载使新 topic 生效
+      }
       const server = await startDaemon(cfg);
       process.stdout.write(`ccmon 已启动 → ${server.url}\n`);
       if (cfg.host === '0.0.0.0') {
@@ -77,6 +88,12 @@ async function main(): Promise<void> {
         }
         if (cfg.token) process.stdout.write(`  token：${cfg.token}\n`);
         process.stdout.write('  ⚠ 注意：LAN 模式下，持 token 的设备点「进入会话」会切换本机终端窗口焦点。\n');
+      }
+      if (cfg.ntfy) {
+        const base = server.url.replace(/\/$/, '');
+        const q = cfg.token ? `?token=${cfg.token}` : '';
+        process.stdout.write(`  📱 手机通知已启用（ntfy topic: ${cfg.ntfy.topic}）\n`);
+        process.stdout.write(`     扫码订阅：浏览器打开 ${base}/pairing.html${q}\n`);
       }
       process.stdout.write('  按 Ctrl-C 停止。\n');
       const shutdown = async () => {

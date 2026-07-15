@@ -6,8 +6,8 @@
  */
 
 import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import type { Config } from './types.ts';
 import { SECRET_PATH_DENYLIST } from './types.ts';
@@ -60,6 +60,28 @@ function readUserConfig(): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/**
+ * 浅合并 patch 到用户配置文件并持久化（0600）。用于把自动生成的 token / ntfy topic
+ * 存下来，使手机订阅/配对在重启后仍然稳定有效。失败静默（不致命）。
+ */
+export function saveUserConfig(patch: Record<string, unknown>): void {
+  try {
+    const p = userConfigPath();
+    mkdirSync(dirname(p), { recursive: true });
+    const current = readUserConfig();
+    const next = { ...current, ...patch };
+    writeFileSync(p, JSON.stringify(next, null, 2) + '\n', 'utf8');
+    chmodSync(p, 0o600);
+  } catch {
+    /* 持久化失败不致命：本次运行内存里仍有值 */
+  }
+}
+
+/** 生成一个别人难以猜到的 ntfy topic（ntfy.sh 是公开的，靠不可猜保证隐私）。 */
+export function generateNtfyTopic(): string {
+  return 'ccmon-' + randomBytes(9).toString('base64url');
 }
 
 /**

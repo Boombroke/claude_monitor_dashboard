@@ -123,6 +123,45 @@ export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
     return { url, ip, port: cfg.port, hasQr: !!svg, svg };
   });
 
+  // —— ntfy 手机订阅配对：扫码一键订阅（不依赖 LAN，走公网推送）——
+  app.get('/api/ntfy-pairing', async () => {
+    if (!cfg.ntfy) return { enabled: false };
+    const { server: ntfyServer, topic } = cfg.ntfy;
+    // ntfy 深链：ntfy://<host>/<topic> 一扫即订阅（部分相机不认 → 附 https 兜底手动订阅）。
+    const host = ntfyServer.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const secure = ntfyServer.startsWith('https');
+    const deepLink = `ntfy://${host}/${topic}${secure ? '' : '?secure=false'}`;
+    const webUrl = `${ntfyServer.replace(/\/+$/, '')}/${topic}`;
+    let deepQr: string | undefined;
+    let webQr: string | undefined;
+    try {
+      const qrPath = './qr.ts';
+      const mod = (await import(qrPath)) as { qrSvg: (t: string) => string };
+      deepQr = mod.qrSvg(deepLink);
+      webQr = mod.qrSvg(webUrl);
+    } catch {
+      /* QR 不可用：仅返回 URL 文本 */
+    }
+    return { enabled: true, server: ntfyServer, topic, deepLink, webUrl, deepQr, webQr };
+  });
+
+  // —— 发一条测试推送，验证手机是否已订阅成功 ——
+  app.post('/api/ntfy-test', async (_req, reply) => {
+    if (!cfg.ntfy) return reply.code(409).send({ ok: false, reason: 'ntfy 未启用' });
+    try {
+      const url = `${cfg.ntfy.server.replace(/\/+$/, '')}/${cfg.ntfy.topic}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { Title: 'ccmon', Tags: 'white_check_mark', Priority: 'default' },
+        body: 'ccmon 测试推送：如果你在手机上看到这条，说明订阅成功 ✅',
+        signal: AbortSignal.timeout(5000),
+      });
+      return { ok: res.ok };
+    } catch (e) {
+      return reply.code(502).send({ ok: false, reason: String((e as Error).message) });
+    }
+  });
+
   // —— 进入会话：聚焦其终端标签页（macOS），或降级在 cwd 开新终端 ——
   // 注意：这是会改动桌面的副作用操作，LAN 模式下亦启用（用户已知悉）。
   app.post('/api/sessions/:id/focus', async (req, reply) => {

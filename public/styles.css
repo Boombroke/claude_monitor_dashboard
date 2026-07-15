@@ -410,42 +410,53 @@ section { margin-bottom: 8px; }
 .effort.e-low { background: rgba(82, 82, 91, 0.18); color: var(--fg-muted); }
 .effort.e-medium { background: rgba(59, 130, 246, 0.14); color: var(--working); border-color: rgba(59, 130, 246, 0.3); }
 .effort.e-high { background: rgba(245, 158, 11, 0.16); color: var(--approval); border-color: rgba(245, 158, 11, 0.4); }
+/* xhigh：青蓝主题——电光青→蓝流动渐变文字 + 呼吸辉光 */
 .effort.e-xhigh {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2));
-  color: #fb923c;
-  border-color: rgba(251, 146, 60, 0.5);
-  box-shadow: 0 0 10px rgba(251, 146, 60, 0.25);
-}
-/* max：最高档，紫红渐变 + 流光文字 + 呼吸辉光 */
-.effort.e-max {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(168, 85, 247, 0.25));
-  color: #f0abfc;
-  border-color: rgba(217, 70, 239, 0.6);
-  box-shadow: 0 0 12px rgba(217, 70, 239, 0.35);
-  animation: max-badge-pulse 2s var(--ease-io) infinite;
-}
-@keyframes max-badge-pulse {
-  0%, 100% { box-shadow: 0 0 10px rgba(217, 70, 239, 0.25); }
-  50%      { box-shadow: 0 0 16px rgba(217, 70, 239, 0.5); }
-}
-/* ultracode 徽章：最独特——电光青→蓝→紫流动渐变文字 + 呼吸辉光 */
-.effort.ultracode {
-  background: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(168, 85, 247, 0.2));
-  border-color: rgba(34, 211, 238, 0.6);
-  color: #67e8f9;
-  background-image: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(168, 85, 247, 0.18)),
-    linear-gradient(90deg, #67e8f9, #60a5fa, #c084fc, #67e8f9);
+  background-image: linear-gradient(135deg, rgba(34, 211, 238, 0.16), rgba(59, 130, 246, 0.16)),
+    linear-gradient(90deg, #67e8f9, #60a5fa, #22d3ee, #67e8f9);
+  border-color: rgba(34, 211, 238, 0.5);
   -webkit-background-clip: padding-box, text;
   background-clip: padding-box, text;
   -webkit-text-fill-color: transparent;
   background-size: 100% 100%, 200% 100%;
-  animation: ultra-badge-pulse 2s var(--ease-io) infinite, ultra-text-flow 3s linear infinite;
+  animation: badge-pulse-cyan 2.4s var(--ease-io) infinite, tier-text-flow 3.5s linear infinite;
 }
-@keyframes ultra-badge-pulse {
-  0%, 100% { box-shadow: 0 0 10px rgba(34, 211, 238, 0.35); }
-  50%      { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); }
+@keyframes badge-pulse-cyan {
+  0%, 100% { box-shadow: 0 0 8px rgba(34, 211, 238, 0.25); }
+  50%      { box-shadow: 0 0 14px rgba(59, 130, 246, 0.4); }
 }
-@keyframes ultra-text-flow {
+/* max：炫彩橙黄主题——橙→黄→琥珀流动渐变文字 + 更强呼吸辉光 */
+.effort.e-max {
+  background-image: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(251, 191, 36, 0.2)),
+    linear-gradient(90deg, #fbbf24, #fb923c, #fde047, #f59e0b, #fbbf24);
+  border-color: rgba(251, 191, 36, 0.6);
+  -webkit-background-clip: padding-box, text;
+  background-clip: padding-box, text;
+  -webkit-text-fill-color: transparent;
+  background-size: 100% 100%, 200% 100%;
+  animation: badge-pulse-amber 2s var(--ease-io) infinite, tier-text-flow 3s linear infinite;
+}
+@keyframes badge-pulse-amber {
+  0%, 100% { box-shadow: 0 0 10px rgba(251, 191, 36, 0.3); }
+  50%      { box-shadow: 0 0 20px rgba(251, 146, 60, 0.55); }
+}
+/* ultracode：酷炫紫主题——紫→品红→靛流动渐变文字 + 最强呼吸辉光 */
+.effort.ultracode {
+  background-image: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(217, 70, 239, 0.22)),
+    linear-gradient(90deg, #c084fc, #e879f9, #a855f7, #818cf8, #c084fc);
+  border-color: rgba(192, 132, 252, 0.7);
+  -webkit-background-clip: padding-box, text;
+  background-clip: padding-box, text;
+  -webkit-text-fill-color: transparent;
+  background-size: 100% 100%, 200% 100%;
+  animation: badge-pulse-purple 1.6s var(--ease-io) infinite, tier-text-flow 2.4s linear infinite;
+}
+@keyframes badge-pulse-purple {
+  0%, 100% { box-shadow: 0 0 12px rgba(168, 85, 247, 0.4); }
+  50%      { box-shadow: 0 0 24px rgba(217, 70, 239, 0.65); }
+}
+/* 三档共用的渐变文字流动 */
+@keyframes tier-text-flow {
   0%   { background-position: 0 0, 0 0; }
   100% { background-position: 0 0, 200% 0; }
 }
@@ -459,59 +470,64 @@ section { margin-bottom: 8px; }
 .card.e-high {
   border-color: rgba(245, 158, 11, 0.3);
 }
-/* xhigh/ultra：顶部流光渐变条 + 更强边光呼吸 */
+/* 三档共用的顶部流光扫描关键帧 */
+@keyframes tier-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* xhigh：青蓝主题——青→蓝双色边光呼吸 + 顶部青蓝流光（强度：中） */
 .card.e-xhigh {
-  border-color: rgba(251, 146, 60, 0.4);
-  animation: card-in 0.4s var(--ease) both, xhigh-glow 3.5s var(--ease-io) infinite;
+  border-color: rgba(34, 211, 238, 0.4);
+  animation: card-in 0.4s var(--ease) both, glow-cyan 3.2s var(--ease-io) infinite;
 }
 .card.e-xhigh::after {
   content: "";
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #fb923c, #ef4444, #fb923c, transparent);
+  z-index: 2;
+  background: linear-gradient(90deg, transparent, #22d3ee, #60a5fa, #22d3ee, transparent);
   background-size: 200% 100%;
-  animation: xhigh-sweep 3s linear infinite;
+  animation: tier-sweep 3s linear infinite;
   pointer-events: none;
-  opacity: 0.7;
+  opacity: 0.75;
 }
-@keyframes xhigh-glow {
-  0%, 100% { box-shadow: var(--shadow-card), 0 0 0 0 rgba(251, 146, 60, 0); }
-  50%      { box-shadow: var(--shadow-card), 0 0 16px 0 rgba(251, 146, 60, 0.18); }
+@keyframes glow-cyan {
+  0%   { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(34, 211, 238, 0.4), 0 0 12px 0 rgba(34, 211, 238, 0.2); }
+  50%  { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(59, 130, 246, 0.4), 0 0 20px 1px rgba(34, 211, 238, 0.26); }
+  100% { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(34, 211, 238, 0.4), 0 0 12px 0 rgba(34, 211, 238, 0.2); }
 }
-@keyframes xhigh-sweep {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-/* WORKING + xhigh 叠加时，动效并存（work-glow 已在，sweep 由 ::after 独立） */
+/* WORKING + xhigh 叠加时动效并存（work-glow 已在，sweep 由 ::after 独立） */
 
-/* max：最强——紫红顶部流光 + 更强边光呼吸 */
+/* max：炫彩橙黄主题——橙→黄双色边光呼吸 + 顶部橙黄流光（强度：强） */
 .card.e-max {
-  border-color: rgba(217, 70, 239, 0.45);
-  animation: card-in 0.4s var(--ease) both, max-glow 3s var(--ease-io) infinite;
+  border-color: rgba(251, 191, 36, 0.45);
+  animation: card-in 0.4s var(--ease) both, glow-amber 2.6s var(--ease-io) infinite;
 }
 .card.e-max::after {
   content: "";
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #ef4444, #d946ef, #a855f7, #d946ef, #ef4444, transparent);
+  z-index: 2;
+  background: linear-gradient(90deg, transparent, #fbbf24, #fb923c, #fde047, #fb923c, #fbbf24, transparent);
   background-size: 200% 100%;
-  animation: xhigh-sweep 2.2s linear infinite;
+  animation: tier-sweep 2.4s linear infinite;
   pointer-events: none;
   opacity: 0.85;
 }
-@keyframes max-glow {
-  0%, 100% { box-shadow: var(--shadow-card), 0 0 0 0 rgba(217, 70, 239, 0); }
-  50%      { box-shadow: var(--shadow-card), 0 0 20px 0 rgba(217, 70, 239, 0.22); }
+@keyframes glow-amber {
+  0%   { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(251, 191, 36, 0.45), 0 0 16px 0 rgba(251, 191, 36, 0.24); }
+  50%  { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(251, 146, 60, 0.5), 0 0 26px 2px rgba(253, 224, 71, 0.32); }
+  100% { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(251, 191, 36, 0.45), 0 0 16px 0 rgba(251, 191, 36, 0.24); }
 }
 
-/* ultracode 卡片：高级特效——电光青蓝→蓝→紫多色边光呼吸 + 顶部流光扫描。
-   保留 ::before 左侧状态色条（更重要），高级感靠多层动画 box-shadow + ::after 顶部流光。
-   全部只动 box-shadow/background-position（合成层，GPU 友好）。 */
+/* ultracode 卡片：酷炫紫主题——紫→品红→靛三色边光呼吸 + 顶部紫色流光（强度：最强）。
+   最高档：辉光范围最大、动画最快、色彩层次最多。保留 ::before 左侧状态色条。 */
 .card.e-ultra {
-  border-color: rgba(34, 211, 238, 0.5);
-  animation: card-in 0.4s var(--ease) both, ultra-glow 2.6s var(--ease-io) infinite;
+  border-color: rgba(192, 132, 252, 0.55);
+  animation: card-in 0.4s var(--ease) both, glow-purple 2s var(--ease-io) infinite;
 }
 .card.e-ultra::after {
   content: "";
@@ -519,17 +535,16 @@ section { margin-bottom: 8px; }
   top: 0; left: 0; right: 0;
   height: 2px;
   z-index: 2;
-  background: linear-gradient(90deg, transparent, #22d3ee, #3b82f6, #a855f7, #22d3ee, transparent);
+  background: linear-gradient(90deg, transparent, #c084fc, #e879f9, #818cf8, #a855f7, #c084fc, transparent);
   background-size: 200% 100%;
-  animation: xhigh-sweep 2.2s linear infinite;
+  animation: tier-sweep 1.8s linear infinite;
   pointer-events: none;
-  opacity: 0.9;
+  opacity: 0.95;
 }
-/* 多色边光呼吸：内描边 + 外发光在青/蓝/紫间循环，营造"电光流动"的高级感 */
-@keyframes ultra-glow {
-  0%   { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(34, 211, 238, 0.5), 0 0 16px 0 rgba(34, 211, 238, 0.28); }
-  50%  { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(168, 85, 247, 0.5), 0 0 26px 2px rgba(59, 130, 246, 0.32); }
-  100% { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(34, 211, 238, 0.5), 0 0 16px 0 rgba(34, 211, 238, 0.28); }
+@keyframes glow-purple {
+  0%   { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(192, 132, 252, 0.55), 0 0 20px 0 rgba(168, 85, 247, 0.3); }
+  50%  { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(232, 121, 249, 0.6), 0 0 32px 3px rgba(129, 140, 248, 0.38); }
+  100% { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(192, 132, 252, 0.55), 0 0 20px 0 rgba(168, 85, 247, 0.3); }
 }
 
 /* ——————————————————————————— 进入按钮 ——————————————————————————— */

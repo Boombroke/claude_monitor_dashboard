@@ -52,8 +52,8 @@ test('幂等：对自身输出再跑一次得到 deep-equal 结果', () => {
   const once = computeMergedSettings({}, PORT);
   const twice = computeMergedSettings(once, PORT);
   assert.deepEqual(twice, once);
-  // command 数量不翻倍
-  assert.equal(allCommands(twice).length, 3);
+  // command 数量不翻倍（Notification×2 + Stop×1 + SessionStart×1 = 4）
+  assert.equal(allCommands(twice).length, 4);
 });
 
 test('保留无关设置与他人 hook，并在其旁追加自有条目', () => {
@@ -72,6 +72,7 @@ test('保留无关设置与他人 hook，并在其旁追加自有条目', () => 
   // 追加了自有条目
   assert.equal(merged.hooks.Notification.length, 2);
   assert.equal(merged.hooks.Stop.length, 1);
+  assert.equal(merged.hooks.SessionStart.length, 1);
   // 未改动原对象（深拷贝）
   assert.equal((existing.hooks as any).Notification, undefined);
 });
@@ -82,8 +83,8 @@ test('已存在的 ccmon 条目被替换而非重复', () => {
 
   const merged = computeMergedSettings(stale, PORT);
   const cmds = allCommands(merged);
-  // 无重复：仍是 3 条
-  assert.equal(cmds.length, 3);
+  // 无重复：仍是 4 条
+  assert.equal(cmds.length, 4);
   // 全部指向新端口，旧端口条目已清除
   assert.ok(cmds.every((c) => c.includes(':7420/')));
   assert.ok(!cmds.some((c) => c.includes(':9999/')));

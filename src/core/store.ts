@@ -167,6 +167,8 @@ export class InMemorySessionStore implements SessionStore {
       'recentReplies',
       'contextTokens',
       'contextWindow',
+      'effort',
+      'effortSource',
       'model',
       'attentionReason',
     ];

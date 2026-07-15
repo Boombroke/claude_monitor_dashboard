@@ -54,28 +54,40 @@ function doRender() {
   });
 }
 
-// 用 View Transitions API 让卡片重排/增删丝滑过渡（不支持则直接渲染）。
-// 仅对"结构性"渲染启用；每秒 tick 的时长刷新不走过渡（见下）。
+// 结构签名：可见会话的 id + 状态 + 分区归属。只有它变了才值得用 View Transition
+// 做重排/增删动画；纯内容更新（recentReplies 增长、上下文条移动）直接即时渲染，
+// 避免过渡期间的旧快照"冻结"住展开卡片的实时内容。
+function structuralSig() {
+  const ids = [...sessions.keys()].sort();
+  return ids.map((id) => `${id}:${sessions.get(id).state}`).join('|');
+}
+let lastSig = '';
 let vtPending = false;
-let vtDirty = false; // 过渡进行中又来了更新 → 结束后补渲染一次
-function render(useTransition = true) {
-  if (useTransition && typeof document.startViewTransition === 'function') {
-    if (vtPending) {
-      vtDirty = true; // 别丢更新：等当前过渡结束再渲染
-      return;
-    }
-    vtPending = true;
-    const vt = document.startViewTransition(() => doRender());
-    vt.finished.finally(() => {
-      vtPending = false;
-      if (vtDirty) {
-        vtDirty = false;
-        render(true);
-      }
-    });
+let vtDirty = false;
+function render(force = false) {
+  const sig = structuralSig();
+  const structural = force || sig !== lastSig;
+  lastSig = sig;
+
+  // 非结构性变化（只是内容更新）→ 直接渲染，实时、不冻结。
+  if (!structural || typeof document.startViewTransition !== 'function') {
+    doRender();
     return;
   }
-  doRender();
+  // 结构性变化 → View Transition 丝滑重排。
+  if (vtPending) {
+    vtDirty = true;
+    return;
+  }
+  vtPending = true;
+  const vt = document.startViewTransition(() => doRender());
+  vt.finished.finally(() => {
+    vtPending = false;
+    if (vtDirty) {
+      vtDirty = false;
+      render(true);
+    }
+  });
 }
 
 // —— 进入会话：POST /focus，把该会话的终端切到前台 ——

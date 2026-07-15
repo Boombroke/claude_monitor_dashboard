@@ -89,6 +89,15 @@ export function loadConfig(overrides: ConfigOverrides = {}): Config {
   const ntfyServer =
     overrides.ntfyServer ?? (process.env.CCMON_NTFY_SERVER || undefined) ?? ((user.ntfy as any)?.server as string | undefined) ?? 'https://ntfy.sh';
 
+  // 全局默认 effort：读 ~/.claude/settings.json 的 effortLevel（会话未收到 hook 时兜底）。
+  let defaultEffort: string | undefined;
+  try {
+    const s = JSON.parse(readFileSync(join(claudeDir, 'settings.json'), 'utf8')) as Record<string, unknown>;
+    if (typeof s.effortLevel === 'string') defaultEffort = s.effortLevel;
+  } catch {
+    /* 无 settings 或解析失败：无默认 */
+  }
+
   const cfg: Config = {
     claudeDir,
     sessionsDir: join(claudeDir, 'sessions'),
@@ -115,6 +124,7 @@ export function loadConfig(overrides: ConfigOverrides = {}): Config {
 
     redact: overrides.redact ?? (user.redact as boolean | undefined) ?? DEFAULTS.redact,
     maxContextChars: (user.maxContextChars as number | undefined) ?? DEFAULTS.maxContextChars,
+    ...(defaultEffort ? { defaultEffort } : {}),
 
     hookTtlMs: (user.hookTtlMs as number | undefined) ?? DEFAULTS.hookTtlMs,
     idleGraceMs: (user.idleGraceMs as number | undefined) ?? DEFAULTS.idleGraceMs,

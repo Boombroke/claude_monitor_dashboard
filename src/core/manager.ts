@@ -170,6 +170,11 @@ export class SessionManager {
     } else if (payload.permission_mode) {
       this.store.upsert(sid, { permissionMode: payload.permission_mode });
     }
+    // hook 携带的 effort.level 为该会话的真实推理强度（覆盖全局默认兜底）。
+    const hookEffort = payload.effort?.level;
+    if (hookEffort && this.store.get(sid)) {
+      this.store.upsert(sid, { effort: hookEffort, effortSource: 'hook' });
+    }
     if (payload.cwd) this.maybeTrack(sid, payload.cwd);
     // hook 驱动的状态（尤其 NEEDS_APPROVAL/DONE）立即生效，不去抖。
     this.recompute(sid, /*immediate*/ true);
@@ -213,6 +218,12 @@ export class SessionManager {
     if (snap.nameSource !== undefined) patch.nameSource = snap.nameSource;
     if (snap.waitingFor !== undefined) patch.waitingFor = snap.waitingFor;
     if (snap.startedAt !== undefined) patch.startedAt = snap.startedAt;
+    // effort 全局默认兜底：仅当会话尚无 hook 来源的真实值时填入（不覆盖 hook）。
+    const existing = this.store.get(snap.sessionId);
+    if (this.cfg.defaultEffort && existing?.effortSource !== 'hook' && existing?.effort === undefined) {
+      patch.effort = this.cfg.defaultEffort;
+      patch.effortSource = 'default';
+    }
     this.store.upsert(snap.sessionId, patch);
   }
 

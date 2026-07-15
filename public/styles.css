@@ -227,6 +227,11 @@ section { margin-bottom: 8px; }
   /* 长列表性能：视口外跳过渲染 */
   content-visibility: auto;
   contain-intrinsic-size: 96px;
+}
+/* 展开态卡片内容较高且需实时刷新，不做视口跳过（否则展开区更新可能被跳过） */
+.card.expanded {
+  content-visibility: visible;
+  contain-intrinsic-size: auto;
   /* 入场动画 */
   animation: card-in 0.4s var(--ease) both;
 }
@@ -277,8 +282,8 @@ section { margin-bottom: 8px; }
 .card-head {
   padding: 14px 16px 14px 18px;
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 5px 12px;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 5px 10px;
   align-items: center;
   cursor: pointer;
 }
@@ -388,6 +393,64 @@ section { margin-bottom: 8px; }
 .badge.s-DONE_WAITING { background: rgba(34, 197, 94, 0.14); color: var(--done); border-color: rgba(34, 197, 94, 0.25); }
 .badge.s-IDLE { background: rgba(82, 82, 91, 0.18); color: var(--fg-muted); }
 .badge.s-DEAD { background: rgba(63, 63, 70, 0.2); color: var(--fg-subtle); }
+
+/* ——————————————————————————— effort 徽章 + 分级特效 ——————————————————————————— */
+
+.effort {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  justify-self: end;
+}
+/* 档位越高，色越"热"、越醒目 */
+.effort.e-low { background: rgba(82, 82, 91, 0.18); color: var(--fg-muted); }
+.effort.e-medium { background: rgba(59, 130, 246, 0.14); color: var(--working); border-color: rgba(59, 130, 246, 0.3); }
+.effort.e-high { background: rgba(245, 158, 11, 0.16); color: var(--approval); border-color: rgba(245, 158, 11, 0.4); }
+.effort.e-xhigh {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2));
+  color: #fb923c;
+  border-color: rgba(251, 146, 60, 0.5);
+  box-shadow: 0 0 10px rgba(251, 146, 60, 0.25);
+}
+/* 全局默认值：虚线边框 + 降透明，暗示"非精确" */
+.effort.effort-default { border-style: dashed; opacity: 0.7; }
+
+/* —— 分级卡片特效：档位越高越"热" —— */
+/* medium：左边框略亮 */
+.card.e-medium { border-color: rgba(59, 130, 246, 0.2); }
+/* high：柔和琥珀边光 */
+.card.e-high {
+  border-color: rgba(245, 158, 11, 0.3);
+}
+/* xhigh/ultra：顶部流光渐变条 + 更强边光呼吸 */
+.card.e-xhigh {
+  border-color: rgba(251, 146, 60, 0.4);
+  animation: card-in 0.4s var(--ease) both, xhigh-glow 3.5s var(--ease-io) infinite;
+}
+.card.e-xhigh::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #fb923c, #ef4444, #fb923c, transparent);
+  background-size: 200% 100%;
+  animation: xhigh-sweep 3s linear infinite;
+  pointer-events: none;
+  opacity: 0.7;
+}
+@keyframes xhigh-glow {
+  0%, 100% { box-shadow: var(--shadow-card), 0 0 0 0 rgba(251, 146, 60, 0); }
+  50%      { box-shadow: var(--shadow-card), 0 0 16px 0 rgba(251, 146, 60, 0.18); }
+}
+@keyframes xhigh-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+/* WORKING + xhigh 叠加时，动效并存（work-glow 已在，sweep 由 ::after 独立） */
 
 /* ——————————————————————————— 进入按钮 ——————————————————————————— */
 

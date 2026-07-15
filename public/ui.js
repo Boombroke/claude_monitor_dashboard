@@ -10,6 +10,25 @@ export const STATE_LABEL = {
   DEAD: '已结束',
 };
 
+// effort 档位标签（对齐 Claude CLI 的 /effort 档位）。
+export const EFFORT_LABEL = {
+  low: 'LOW',
+  medium: 'MED',
+  high: 'HIGH',
+  xhigh: 'XHIGH',
+};
+
+/** 归一化 effort 取值：ultracode/max 归到 xhigh，其余小写匹配已知档。 */
+export function normEffort(v) {
+  if (!v) return null;
+  const s = String(v).toLowerCase();
+  if (s === 'ultracode' || s === 'max' || s === 'xhigh') return 'xhigh';
+  if (s === 'high') return 'high';
+  if (s === 'medium' || s === 'med') return 'medium';
+  if (s === 'low') return 'low';
+  return null;
+}
+
 // 时间线事件类型的中文标签。
 const KIND_LABEL = {
   state: '状态',
@@ -144,8 +163,22 @@ function card(session, ctx, now) {
   // View Transitions：给每张卡片唯一名字，重排时自动补间位移。
   c.style.viewTransitionName = 'card-' + cssId(session.sessionId);
 
+  // effort 分级：给卡片加 e-<level> class，驱动分级特效。
+  const effort = normEffort(session.effort);
+  if (effort) c.classList.add('e-' + effort);
+
   const head = el('div', 'card-head');
   head.append(el('div', 'name', session.name || session.sessionId.slice(0, 8)));
+  if (effort) {
+    const eb = el('div', `effort e-${effort}`, EFFORT_LABEL[effort] || effort);
+    if (session.effortSource === 'default') {
+      eb.classList.add('effort-default');
+      eb.title = '全局默认值（未收到该会话的 hook；装 hook 可显示真实值）';
+    } else {
+      eb.title = '推理强度：' + effort;
+    }
+    head.append(eb);
+  }
   head.append(el('div', `badge s-${session.state}`, stateName(session.state)));
   head.append(el('div', 'caret', '▸'));
 

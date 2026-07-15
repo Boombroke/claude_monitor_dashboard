@@ -49,8 +49,12 @@ function buildCommandHook(port: number, token?: string): CommandHook {
  * 纯函数：返回待合并进 hooks 的 matcher 分组。
  *   - Notification：两个分组（permission_prompt / idle_prompt）
  *   - Stop：一个分组（无 matcher）
+ *   - SessionStart：一个分组（携带 effort.level 等，用于捕获会话真实推理强度）
  */
-export function buildHookEntries(port: number, token?: string): { Notification: any[]; Stop: any[] } {
+export function buildHookEntries(
+  port: number,
+  token?: string,
+): { Notification: any[]; Stop: any[]; SessionStart: any[] } {
   const permissionGroup: HookGroup = {
     matcher: 'permission_prompt',
     hooks: [buildCommandHook(port, token)],
@@ -62,7 +66,14 @@ export function buildHookEntries(port: number, token?: string): { Notification: 
   const stopGroup: HookGroup = {
     hooks: [buildCommandHook(port, token)],
   };
-  return { Notification: [permissionGroup, idleGroup], Stop: [stopGroup] };
+  const sessionStartGroup: HookGroup = {
+    hooks: [buildCommandHook(port, token)],
+  };
+  return {
+    Notification: [permissionGroup, idleGroup],
+    Stop: [stopGroup],
+    SessionStart: [sessionStartGroup],
+  };
 }
 
 /** 判断一个 command 串是否属于本工具（含哨兵）。 */
@@ -140,6 +151,10 @@ export function computeMergedSettings(current: any, port: number, token?: string
   const stop = Array.isArray(scrubbed.Stop) ? [...(scrubbed.Stop as unknown[])] : [];
   stop.push(...entries.Stop);
   scrubbed.Stop = stop;
+
+  const sessionStart = Array.isArray(scrubbed.SessionStart) ? [...(scrubbed.SessionStart as unknown[])] : [];
+  sessionStart.push(...entries.SessionStart);
+  scrubbed.SessionStart = sessionStart;
 
   base.hooks = scrubbed;
   return base;

@@ -77,6 +77,8 @@ export interface Session {
   model?: string; // assistant.message.model
   contextTokens?: number; // 当前上下文占用 token（= usage 四项之和）
   contextWindow?: number; // 推断的上下文窗口上限（200000 | 1000000）
+  effort?: string; // 推理强度 low/medium/high/xhigh（hook 优先，全局默认兜底）
+  effortSource?: 'hook' | 'default'; // effort 来源
 
   // —— 时间 ——
   startedAt: number; // epoch ms
@@ -214,6 +216,8 @@ export interface HookPayload {
   /** Stop / SubagentStop 携带。 */
   last_assistant_message?: string;
   stop_hook_active?: boolean;
+  /** 推理强度，形如 { level: "high" }（SessionStart 等事件携带）。 */
+  effort?: { level?: string };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -379,6 +383,9 @@ export interface Config {
   redact: boolean;
   /** 上下文字段截断长度（lastPrompt / summary / title）。 */
   maxContextChars: number; // 默认 120
+
+  /** 全局默认 effort（读自 ~/.claude/settings.json 的 effortLevel），会话未收到 hook 时兜底。 */
+  defaultEffort?: string;
 
   /** 行为调参。 */
   hookTtlMs: number; // 新鲜 hook 事件 TTL，默认 30000

@@ -428,17 +428,26 @@ section { margin-bottom: 8px; }
   0%, 100% { box-shadow: 0 0 10px rgba(217, 70, 239, 0.25); }
   50%      { box-shadow: 0 0 16px rgba(217, 70, 239, 0.5); }
 }
-/* ultracode：xhigh + 动态编排，最独特——电光青蓝渐变 + 流光文字 */
+/* ultracode 徽章：最独特——电光青→蓝→紫流动渐变文字 + 呼吸辉光 */
 .effort.ultracode {
-  background: linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(59, 130, 246, 0.22));
-  color: #67e8f9;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(168, 85, 247, 0.2));
   border-color: rgba(34, 211, 238, 0.6);
-  box-shadow: 0 0 12px rgba(34, 211, 238, 0.4);
-  animation: ultra-badge-pulse 1.8s var(--ease-io) infinite;
+  color: #67e8f9;
+  background-image: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(168, 85, 247, 0.18)),
+    linear-gradient(90deg, #67e8f9, #60a5fa, #c084fc, #67e8f9);
+  -webkit-background-clip: padding-box, text;
+  background-clip: padding-box, text;
+  -webkit-text-fill-color: transparent;
+  background-size: 100% 100%, 200% 100%;
+  animation: ultra-badge-pulse 2s var(--ease-io) infinite, ultra-text-flow 3s linear infinite;
 }
 @keyframes ultra-badge-pulse {
-  0%, 100% { box-shadow: 0 0 10px rgba(34, 211, 238, 0.3); }
-  50%      { box-shadow: 0 0 18px rgba(34, 211, 238, 0.6); }
+  0%, 100% { box-shadow: 0 0 10px rgba(34, 211, 238, 0.35); }
+  50%      { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); }
+}
+@keyframes ultra-text-flow {
+  0%   { background-position: 0 0, 0 0; }
+  100% { background-position: 0 0, 200% 0; }
 }
 /* 全局默认值：虚线边框 + 降透明，暗示"非精确" */
 .effort.effort-default { border-style: dashed; opacity: 0.7; }
@@ -497,25 +506,30 @@ section { margin-bottom: 8px; }
   50%      { box-shadow: var(--shadow-card), 0 0 20px 0 rgba(217, 70, 239, 0.22); }
 }
 
-/* ultracode 卡片：电光青蓝顶部流光 + 边光呼吸（区别于 max 的紫红） */
+/* ultracode 卡片：高级特效——电光青蓝→蓝→紫多色边光呼吸 + 顶部流光扫描。
+   保留 ::before 左侧状态色条（更重要），高级感靠多层动画 box-shadow + ::after 顶部流光。
+   全部只动 box-shadow/background-position（合成层，GPU 友好）。 */
 .card.e-ultra {
-  border-color: rgba(34, 211, 238, 0.45);
-  animation: card-in 0.4s var(--ease) both, ultra-glow 3s var(--ease-io) infinite;
+  border-color: rgba(34, 211, 238, 0.5);
+  animation: card-in 0.4s var(--ease) both, ultra-glow 2.6s var(--ease-io) infinite;
 }
 .card.e-ultra::after {
   content: "";
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #22d3ee, #3b82f6, #22d3ee, transparent);
+  z-index: 2;
+  background: linear-gradient(90deg, transparent, #22d3ee, #3b82f6, #a855f7, #22d3ee, transparent);
   background-size: 200% 100%;
-  animation: xhigh-sweep 2.4s linear infinite;
+  animation: xhigh-sweep 2.2s linear infinite;
   pointer-events: none;
-  opacity: 0.8;
+  opacity: 0.9;
 }
+/* 多色边光呼吸：内描边 + 外发光在青/蓝/紫间循环，营造"电光流动"的高级感 */
 @keyframes ultra-glow {
-  0%, 100% { box-shadow: var(--shadow-card), 0 0 0 0 rgba(34, 211, 238, 0); }
-  50%      { box-shadow: var(--shadow-card), 0 0 20px 0 rgba(34, 211, 238, 0.2); }
+  0%   { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(34, 211, 238, 0.5), 0 0 16px 0 rgba(34, 211, 238, 0.28); }
+  50%  { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(168, 85, 247, 0.5), 0 0 26px 2px rgba(59, 130, 246, 0.32); }
+  100% { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(34, 211, 238, 0.5), 0 0 16px 0 rgba(34, 211, 238, 0.28); }
 }
 
 /* ——————————————————————————— 进入按钮 ——————————————————————————— */

@@ -1,7 +1,7 @@
 // ccmon PWA — M3 版（零依赖 vanilla JS ES module，消费 SSE）。
 // 状态 + SSE + 过滤 + 时间线拉取 + 通知 + 安装提示；渲染委托给 ui.js。
 
-import { ALL_STATES, STATE_LABEL, renderSessions, tickDurations, el } from './ui.js';
+import { ALL_STATES, STATE_LABEL, DONE_BURST_MS, renderSessions, tickDurations, el } from './ui.js';
 
 // —— 全局状态 ——
 /** sessionId → Session */
@@ -14,6 +14,11 @@ const expanded = new Set();
 const timelineOpen = new Set();
 /** sessionId → { status:'loading'|'ok'|'error', events?:SessionEvent[] } */
 const timelines = new Map();
+
+/** 正在播放「刚完成」爆发特效的会话（进入 DONE_WAITING 后的短窗口内）。 */
+const justDone = new Set();
+/** sessionId → 爆发撤除定时器句柄，用于去重/清理。 */
+const justDoneTimers = new Map();
 
 const filters = {
   states: new Set(ALL_STATES), // 默认全开
@@ -48,6 +53,7 @@ function doRender() {
     expanded,
     timelines,
     timelineOpen,
+    justDone,
     onToggle: toggleSession,
     onRefetch: fetchTimeline,
     onFocus: focusSession,
@@ -205,14 +211,23 @@ function connect() {
         pruneStale();
         render();
         break;
-      case 'session.update':
-        sessions.set(msg.session.sessionId, msg.session);
+      case 'session.update': {
+        const id = msg.session.sessionId;
+        const prev = sessions.get(id);
+        sessions.set(id, msg.session);
+        // 只有「真实转换进入完成态」才触发爆发：旧态存在且非 DONE_WAITING、
+        // 新态是 DONE_WAITING。快照重放 / 首次出现（prev 为空）都不炸——
+        // 避免把早已完成的会话也闪一遍。
+        if (prev && prev.state !== 'DONE_WAITING' && msg.session.state === 'DONE_WAITING') {
+          triggerDoneBurst(id);
+        }
         // 若该会话正展开且时间线已缓存，用推送里的 events 顺带刷新（若有）。
-        if (expanded.has(msg.session.sessionId) && Array.isArray(msg.session.events)) {
-          timelines.set(msg.session.sessionId, { status: 'ok', events: msg.session.events });
+        if (expanded.has(id) && Array.isArray(msg.session.events)) {
+          timelines.set(id, { status: 'ok', events: msg.session.events });
         }
         render();
         break;
+      }
       case 'session.remove':
         sessions.delete(msg.sessionId);
         expanded.delete(msg.sessionId);
@@ -226,10 +241,35 @@ function connect() {
   };
 }
 
+/**
+ * 触发某会话的「刚完成」爆发特效：加入 justDone 集合，DONE_BURST_MS 后移除。
+ * 重复触发（罕见）会重置计时，特效重新计满整窗口。
+ */
+function triggerDoneBurst(id) {
+  const existing = justDoneTimers.get(id);
+  if (existing) clearTimeout(existing);
+  justDone.add(id);
+  const timer = setTimeout(() => {
+    justDone.delete(id);
+    justDoneTimers.delete(id);
+    // 爆发结束：重渲染撤下 .just-done，转入持续柔和呼吸（纯 CSS）。
+    render(true);
+  }, DONE_BURST_MS);
+  justDoneTimers.set(id, timer);
+}
+
 /** 移除对已不存在会话的展开/缓存引用。 */
 function pruneStale() {
   for (const id of [...expanded]) if (!sessions.has(id)) expanded.delete(id);
   for (const id of [...timelines.keys()]) if (!sessions.has(id)) timelines.delete(id);
+  // 会话消失时清理其爆发计时器，避免悬挂定时器对已删卡片调 render。
+  for (const id of [...justDoneTimers.keys()]) {
+    if (!sessions.has(id)) {
+      clearTimeout(justDoneTimers.get(id));
+      justDoneTimers.delete(id);
+      justDone.delete(id);
+    }
+  }
 }
 
 // —— 通知 ——

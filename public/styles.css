@@ -588,6 +588,45 @@ section { margin-bottom: 8px; }
   100% { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(192, 132, 252, 0.55), 0 0 20px 0 rgba(168, 85, 247, 0.3); }
 }
 
+/* ——————————————————————————— 完成态特效（DONE_WAITING）——————————————————————————— */
+/* 分两层：① 持续柔和绿呼吸——让「已完成等你看」的卡片在列表里一眼可辨；
+   ② .just-done 一次性爆发——WORKING→DONE 的高光瞬间（由 app.js 门控，只在真实
+   转换那一刻播一次），辉光炸开 + 卡片轻微回弹 + 徽章弹跳。 */
+
+/* ① 持续柔和绿呼吸（常驻）。放在 effort 特效之后 → 盖过其常驻 glow：完成态短暂
+   且更需被看见。 */
+.card.s-DONE_WAITING {
+  border-color: rgba(34, 197, 94, 0.4);
+  animation: card-in 0.4s var(--ease) both, done-breath 3s var(--ease-io) infinite;
+}
+@keyframes done-breath {
+  0%, 100% { box-shadow: var(--shadow-card), 0 0 0 0 rgba(34, 197, 94, 0); }
+  50%      { box-shadow: var(--shadow-card), 0 0 16px 0 rgba(34, 197, 94, 0.18); }
+}
+
+/* ② 一次性爆发（.just-done，窗口 ~1.4s 后由 JS 撤下）。特异性同为 0,2,0，靠源码
+   顺序压过上面的呼吸，播完自然回落。 */
+.card.just-done {
+  border-color: rgba(34, 197, 94, 0.75);
+  z-index: 3;
+  animation: done-burst 1.2s var(--ease) both;
+}
+@keyframes done-burst {
+  0%   { box-shadow: var(--shadow-card), 0 0 0 0 rgba(34, 197, 94, 0); transform: scale(1); }
+  10%  { box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(34, 197, 94, 0.65), 0 0 36px 7px rgba(34, 197, 94, 0.55); transform: scale(1.015); }
+  45%  { box-shadow: var(--shadow-card), 0 0 22px 2px rgba(34, 197, 94, 0.32); transform: scale(1); }
+  100% { box-shadow: var(--shadow-card), 0 0 0 0 rgba(34, 197, 94, 0); transform: scale(1); }
+}
+/* 徽章弹跳（爆发专属）：不碰 ::after，避开与 effort 顶部流光层冲突。 */
+.card.just-done .badge.s-DONE_WAITING {
+  animation: done-badge-pop 0.6s var(--ease) both;
+}
+@keyframes done-badge-pop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  55%  { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
 /* ——————————————————————————— 进入按钮 ——————————————————————————— */
 
 .card-actions {

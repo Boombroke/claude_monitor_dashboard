@@ -42,6 +42,11 @@ const KIND_LABEL = {
 // 需要用户注意的状态（置顶 + “等待 Xm” 前缀）。
 const ATTENTION = ['NEEDS_APPROVAL', 'IDLE_INPUT', 'DONE_WAITING'];
 
+// 「刚完成」爆发特效的持续窗口（ms）。app.js 记录完成时刻，本窗口内的卡片
+// 带 .just-done class 播放一次性爆发；窗口过后转入持续柔和呼吸。
+// 需与 styles.css 的 done-burst 动画时长匹配（略大，确保动画播完再撤）。
+export const DONE_BURST_MS = 1400;
+
 // UI 分区顺序：需要你的置顶。
 export const SECTIONS = [
   { key: 'attention', title: '需要你', states: ['NEEDS_APPROVAL', 'IDLE_INPUT', 'DONE_WAITING'] },
@@ -167,7 +172,12 @@ function timelineEl(session, ctx) {
 
 function card(session, ctx, now) {
   const isOpen = ctx.expanded.has(session.sessionId);
-  const c = el('div', `card s-${session.state}${isOpen ? ' expanded' : ''}`);
+  // 「刚完成」爆发：会话在爆发窗口内 → 加 .just-done 播放一次性特效。
+  const justDone = ctx.justDone ? ctx.justDone.has(session.sessionId) : false;
+  const c = el(
+    'div',
+    `card s-${session.state}${isOpen ? ' expanded' : ''}${justDone ? ' just-done' : ''}`,
+  );
   c.dataset.sid = session.sessionId;
   // View Transitions：给每张卡片唯一名字，重排时自动补间位移。
   c.style.viewTransitionName = 'card-' + cssId(session.sessionId);
@@ -375,7 +385,7 @@ export function renderSessions(root, ctx) {
   for (const section of SECTIONS) {
     const items = filtered
       .filter((s) => section.states.includes(s.state))
-      .sort((a, b) => (a.stateSince || 0) - (b.stateSince || 0)); // 等最久的在前
+      .sort((a, b) => (b.stateSince || 0) - (a.stateSince || 0)); // 越新进入该状态的越靠上
     if (items.length === 0) continue;
     const wrap = el('section', section.key === 'attention' ? 'attention' : '');
     const title = el('div', 'section-title', section.title);

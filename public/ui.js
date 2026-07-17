@@ -3,9 +3,9 @@
 
 export const STATE_LABEL = {
   WORKING: '工作中',
-  NEEDS_APPROVAL: '🔐 需要审批',
-  IDLE_INPUT: '💬 等待输入',
-  DONE_WAITING: '✅ 完成',
+  NEEDS_APPROVAL: '需要审批',
+  IDLE_INPUT: '等待输入',
+  DONE_WAITING: '完成',
   IDLE: '空闲',
   DEAD: '已结束',
 };

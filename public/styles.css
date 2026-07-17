@@ -245,22 +245,32 @@ section { margin-bottom: 8px; }
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 28px rgba(0, 0, 0, 0.25);
 }
 
-/* 左侧状态色条（用伪元素，避免影响布局） */
+/* 左侧状态色条（用伪元素，避免影响布局）。4px + 同色微光，比原 3px 更醒目。 */
 .card::before {
   content: "";
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  width: 3px;
+  width: 4px;
   background: var(--idle);
-  transition: background var(--dur) var(--ease-io);
+  transition: background var(--dur) var(--ease-io), box-shadow var(--dur) var(--ease-io);
+  z-index: 1;
 }
-.card.s-WORKING::before { background: var(--working); }
-.card.s-NEEDS_APPROVAL::before { background: var(--approval); }
-.card.s-IDLE_INPUT::before { background: var(--input); }
-.card.s-DONE_WAITING::before { background: var(--done); }
+.card.s-WORKING::before { background: var(--working); box-shadow: 0 0 10px 0 rgba(59, 130, 246, 0.5); }
+.card.s-NEEDS_APPROVAL::before { background: var(--approval); box-shadow: 0 0 10px 0 rgba(245, 158, 11, 0.5); }
+.card.s-IDLE_INPUT::before { background: var(--input); box-shadow: 0 0 10px 0 rgba(234, 179, 8, 0.5); }
+.card.s-DONE_WAITING::before { background: var(--done); box-shadow: 0 0 10px 0 rgba(34, 197, 94, 0.5); }
 .card.s-IDLE::before { background: var(--idle); }
 .card.s-DEAD::before { background: var(--dead); }
 .card.s-DEAD { opacity: 0.55; }
+
+/* 整卡状态色染：从左边缘起一层淡渐变，让整张卡「带上颜色」，与左边条呼应。
+   叠在 var(--bg-elev) 之上（background-image 不覆盖 background-color），
+   向右快速淡出到中性，不喧宾夺主。 */
+.card.s-WORKING { background-image: linear-gradient(90deg, rgba(59, 130, 246, 0.10), transparent 42%); }
+.card.s-NEEDS_APPROVAL { background-image: linear-gradient(90deg, rgba(245, 158, 11, 0.12), transparent 42%); }
+.card.s-IDLE_INPUT { background-image: linear-gradient(90deg, rgba(234, 179, 8, 0.11), transparent 42%); }
+.card.s-DONE_WAITING { background-image: linear-gradient(90deg, rgba(34, 197, 94, 0.11), transparent 42%); }
+/* IDLE/DEAD 保持中性，不染色（本就是「无需关注」态）。 */
 
 /* WORKING 呼吸辉光 */
 .card.s-WORKING {
@@ -419,19 +429,20 @@ section { margin-bottom: 8px; }
 /* ——————————————————————————— 徽章 ——————————————————————————— */
 
 .badge {
-  font-size: 11px;
-  padding: 3px 9px;
+  font-size: 11.5px;
+  padding: 3.5px 10px;
   border-radius: var(--radius-pill);
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.01em;
   border: 1px solid transparent;
   transition: background var(--dur) var(--ease-io), color var(--dur) var(--ease-io);
 }
+/* 「需要你」三态：更实的填充 + 更亮的边，让状态色更跳。 */
 .badge.s-WORKING { background: rgba(59, 130, 246, 0.14); color: var(--working); border-color: rgba(59, 130, 246, 0.25); }
-.badge.s-NEEDS_APPROVAL { background: rgba(245, 158, 11, 0.14); color: var(--approval); border-color: rgba(245, 158, 11, 0.25); }
-.badge.s-IDLE_INPUT { background: rgba(234, 179, 8, 0.14); color: var(--input); border-color: rgba(234, 179, 8, 0.25); }
-.badge.s-DONE_WAITING { background: rgba(34, 197, 94, 0.14); color: var(--done); border-color: rgba(34, 197, 94, 0.25); }
+.badge.s-NEEDS_APPROVAL { background: rgba(245, 158, 11, 0.22); color: var(--approval); border-color: rgba(245, 158, 11, 0.5); }
+.badge.s-IDLE_INPUT { background: rgba(234, 179, 8, 0.22); color: var(--input); border-color: rgba(234, 179, 8, 0.5); }
+.badge.s-DONE_WAITING { background: rgba(34, 197, 94, 0.22); color: var(--done); border-color: rgba(34, 197, 94, 0.5); }
 .badge.s-IDLE { background: rgba(82, 82, 91, 0.18); color: var(--fg-muted); }
 .badge.s-DEAD { background: rgba(63, 63, 70, 0.2); color: var(--fg-subtle); }
 

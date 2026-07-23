@@ -24,6 +24,8 @@ const EVENTS_RING_MAX = 50;
 /** 由 setState 内部用于取"现在"，测试可注入。默认 Date.now。 */
 export interface StoreOptions {
   now?: () => number;
+  /** 首次物化新会话时回填用户元数据（如 priority），不覆盖 patch 已显式提供的值。 */
+  hydrate?: (key: string) => Partial<Session> | undefined;
 }
 
 export class InMemorySessionStore implements SessionStore {
@@ -31,9 +33,11 @@ export class InMemorySessionStore implements SessionStore {
   private readonly pidIndex = new Map<number, string>();
   private readonly listeners = new Set<StoreListener>();
   private readonly now: () => number;
+  private readonly hydrate: ((key: string) => Partial<Session> | undefined) | undefined;
 
   constructor(opts: StoreOptions = {}) {
     this.now = opts.now ?? Date.now;
+    this.hydrate = opts.hydrate;
   }
 
   get(key: string): Session | undefined {
@@ -182,10 +186,19 @@ export class InMemorySessionStore implements SessionStore {
       'model',
       'attentionReason',
       'stateDetail',
+      'priority',
     ];
     for (const k of optional) {
       const v = patch[k];
       if (v !== undefined) (base as unknown as Record<string, unknown>)[k] = v;
+    }
+    // 回填持久化的用户元数据（优先级等）；不覆盖 patch 已显式提供的值。
+    const extra = this.hydrate?.(key);
+    if (extra) {
+      for (const [k, v] of Object.entries(extra)) {
+        const rec = base as unknown as Record<string, unknown>;
+        if (v !== undefined && rec[k] === undefined) rec[k] = v;
+      }
     }
     return base;
   }

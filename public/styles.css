@@ -20,6 +20,12 @@
   --idle: #52525b;          /* zinc-600 */
   --dead: #3f3f46;
 
+  /* 优先级色阶（低→高：白<绿<蓝<紫）。与状态色语义解耦，即使部分色值相同。 */
+  --prio-white: #f4f4f5;
+  --prio-green: #22c55e;
+  --prio-blue: #3b82f6;
+  --prio-purple: #a855f7;
+
   /* —— 尺度 —— */
   --radius: 12px;
   --radius-sm: 8px;
@@ -798,5 +804,96 @@ section { margin-bottom: 8px; }
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* ============================================================
+   会话优先级：色点控件 + 卡片描边 + 置顶分区
+   视觉走「描边 outline」通道，避开被状态占用的左边条(::before)/整卡染色，
+   与被 effort 占用的顶部流光(::after)。
+   ============================================================ */
+
+/* 「已标优先级」置顶分区标题微调（复用 .section-title，仅点缀）。 */
+section.prioritized > .section-title {
+  color: var(--fg, #e4e4e7);
+}
+
+/* 优先级色点控件：卡头里一排小圆点，左低右高（黄绿蓝紫）。 */
+.prio-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+}
+.prio-dot {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.prio-dot:hover {
+  opacity: 0.9;
+  transform: scale(1.15);
+}
+.prio-dot.p-white {
+  background: var(--prio-white);
+}
+.prio-dot.p-green {
+  background: var(--prio-green);
+}
+.prio-dot.p-blue {
+  background: var(--prio-blue);
+}
+.prio-dot.p-purple {
+  background: var(--prio-purple);
+}
+/* 当前选中的档位：实心高亮 + 光环。 */
+.prio-dot.active {
+  opacity: 1;
+  transform: scale(1.2);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+}
+
+/* 卡片优先级描边：用 outline（不占 ::before/::after/左边条/整卡染色通道）。 */
+.card.p-white {
+  outline: 1px solid color-mix(in srgb, var(--prio-white) 70%, transparent);
+  outline-offset: -1px;
+}
+.card.p-green {
+  outline: 1px solid color-mix(in srgb, var(--prio-green) 70%, transparent);
+  outline-offset: -1px;
+}
+.card.p-blue {
+  outline: 1px solid color-mix(in srgb, var(--prio-blue) 70%, transparent);
+  outline-offset: -1px;
+}
+/* 紫（最高）：更醒目的实描边 + 柔光。 */
+.card.p-purple {
+  outline: 1.5px solid var(--prio-purple);
+  outline-offset: -1px;
+  box-shadow: 0 0 14px -2px color-mix(in srgb, var(--prio-purple) 45%, transparent);
+}
+
+/* 窄屏：色点控件保持可见，略缩小间距。 */
+@media (max-width: 600px) {
+  .prio-row {
+    gap: 3px;
+  }
+  .prio-dot {
+    width: 11px;
+    height: 11px;
+  }
+}
+
+/* 尊重减弱动效：优先级靠静态颜色/描边可辨，不依赖动画。 */
+@media (prefers-reduced-motion: reduce) {
+  .prio-dot {
+    transition: none;
   }
 }

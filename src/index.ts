@@ -14,6 +14,7 @@ import { Notifier } from './notify/notifier.ts';
 import { DesktopChannel } from './notify/desktop.ts';
 import { NtfyChannel } from './notify/ntfy.ts';
 import { History } from './db/history.ts';
+import { PriorityStore } from './db/priorities.ts';
 import type { Provider } from './providers/types.ts';
 import { ClaudeProvider } from './providers/claude/provider.ts';
 import { CodexProvider } from './providers/codex/provider.ts';
@@ -25,7 +26,24 @@ export interface RunningServer {
 }
 
 export async function startDaemon(cfg: Config): Promise<RunningServer> {
-  const store = new InMemorySessionStore();
+  // 优先级持久化（JSON 文件）。失败不致命：降级为无持久化。
+  let priorities: PriorityStore | undefined;
+  try {
+    priorities = new PriorityStore();
+  } catch {
+    priorities = undefined;
+  }
+  // store 首次物化会话时，从持久化回填用户指派的优先级（跨重启/DEAD 重建仍在）。
+  const store = new InMemorySessionStore(
+    priorities
+      ? {
+          hydrate: (k) => {
+            const p = priorities!.get(k);
+            return p ? { priority: p } : undefined;
+          },
+        }
+      : {},
+  );
   const sse = new SseHub();
 
   // 历史持久化（node:sqlite）。失败不致命：降级为无持久化。
@@ -83,6 +101,7 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
     hub: sse,
     dispatchPush: (agent, body) => providers.get(agent)?.onPush?.(body),
     ...(history ? { history } : {}),
+    ...(priorities ? { priorities } : {}),
   });
 
   for (const [agent, provider] of providers) {

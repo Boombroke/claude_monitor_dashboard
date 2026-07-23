@@ -37,6 +37,17 @@ export const ATTENTION_STATES: ReadonlySet<SessionState> = new Set<SessionState>
 /** 产生该会话的 agent CLI 种类。多 provider 共存时用于 UI 徽章、通知路由、键命名空间。 */
 export type AgentKind = 'claude' | 'codex' | 'opencode';
 
+/** 用户手动指派的会话优先级色阶（低→高：白<绿<蓝<紫）。undefined = 未指派。属用户元数据，非派生态。 */
+export type PriorityLevel = 'white' | 'green' | 'blue' | 'purple';
+
+/** 优先级排序权重（数值大=更高，置顶）。 */
+export const PRIORITY_RANK: Record<PriorityLevel, number> = {
+  white: 1,
+  green: 2,
+  blue: 3,
+  purple: 4,
+};
+
 /** Claude 会话文件里的原始 status 枚举（实测：busy/idle/waiting；binary 另含更多）。 */
 export type FileStatus = 'busy' | 'idle' | 'waiting';
 
@@ -104,6 +115,7 @@ export interface Session {
   needsAttention: boolean; // ATTENTION_STATES.has(state)
   attentionReason?: string; // 供 UI/通知展示的原因
   stateDetail?: string; // 状态细节（如 opencode 重试次数），仅展示、不影响权威 state
+  priority?: PriorityLevel; // 用户手动指派的优先级；随 SSE 下发；由 /api priority 路由写入，reconciler 绝不触碰
 
   // —— 时间线 ——
   events: SessionEvent[]; // 环形缓冲（最近 ~50 条，已脱敏）

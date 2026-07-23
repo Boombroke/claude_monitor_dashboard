@@ -6,7 +6,8 @@
  */
 
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
-import type { AgentKind, Config, Session, HookPayload, ServerEvent } from '../types.ts';
+import type { AgentKind, Config, Session, HookPayload, ServerEvent, PriorityLevel } from '../types.ts';
+import { PRIORITY_RANK } from '../types.ts';
 import type { SessionStore } from '../types.ts';
 import { SseHub } from './sse.ts';
 import { isSea, readAsset, contentTypeFor, PUBLIC_ASSETS } from './assets.ts';
@@ -21,6 +22,12 @@ export interface HistoryProvider {
   stateDurations(sessionId: string): Record<string, number>;
 }
 
+/** 优先级持久化接口（由 db/priorities.PriorityStore 实现；此处解耦声明避免直接耦合）。 */
+export interface PriorityProvider {
+  set(key: string, level: PriorityLevel): void;
+  delete(key: string): void;
+}
+
 export interface HttpDeps {
   cfg: Config;
   store: SessionStore;
@@ -29,6 +36,8 @@ export interface HttpDeps {
   dispatchPush: (agent: AgentKind, body: unknown) => void;
   /** 可选：持久化历史查询（M3）。 */
   history?: HistoryProvider;
+  /** 可选：用户手动指派的会话优先级持久化。 */
+  priorities?: PriorityProvider;
   now?: () => number;
 }
 
@@ -40,7 +49,7 @@ export interface HttpServer {
 }
 
 export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
-  const { cfg, store, hub, dispatchPush, history } = deps;
+  const { cfg, store, hub, dispatchPush, history, priorities } = deps;
   const now = deps.now ?? Date.now;
   const app = Fastify({ logger: false, bodyLimit: 1_048_576 });
 
@@ -172,6 +181,22 @@ export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
     const result = await focusSession(s.pid, s.cwd);
     if (!result.ok) return reply.code(409).send({ ok: false, reason: result.reason });
     return { ok: true, method: result.method };
+  });
+
+  // —— 会话优先级：用户手动指派色阶（yellow<green<blue<purple）；level=null 清除 ——
+  app.post('/api/sessions/:id/priority', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const s = store.get(id);
+    if (!s) return reply.code(404).send({ error: 'not found' });
+    const level = (req.body as { level?: unknown } | undefined)?.level ?? null;
+    const valid = level === null || (typeof level === 'string' && level in PRIORITY_RANK);
+    if (!valid) return reply.code(400).send({ error: 'bad level' });
+    if (level === null) priorities?.delete(id);
+    else priorities?.set(id, level as PriorityLevel);
+    // upsert 命中 existing 分支（Object.assign）→ emit upsert → SSE session.update → 前端重排。
+    // level=null 时写入 undefined，JSON 序列化自动省略该字段，前端视为未指派。
+    store.upsert(id, { priority: (level ?? undefined) as PriorityLevel | undefined });
+    return { ok: true, priority: level };
   });
 
   // —— SSE ——

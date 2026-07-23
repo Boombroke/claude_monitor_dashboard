@@ -26,6 +26,11 @@ export const AGENT_LABEL = {
   opencode: 'opencode',
 };
 
+// 优先级色阶（低→高：白<绿<蓝<紫）。rank 用于排序，label 用于 title 提示。
+export const PRIORITY_LEVELS = ['white', 'green', 'blue', 'purple'];
+export const PRIORITY_RANK = { white: 1, green: 2, blue: 3, purple: 4 };
+export const PRIORITY_LABEL = { white: '白', green: '绿', blue: '蓝', purple: '紫' };
+
 /** 归一化 effort 取值：ultracode→xhigh；max 为独立最高档；其余小写匹配已知档。 */
 export function normEffort(v) {
   if (!v) return null;
@@ -177,8 +182,27 @@ function timelineEl(session, ctx) {
   return box;
 }
 
+/** 优先级色点行：4 个色点（白绿蓝紫，左低右高）。当前档高亮，单击当前档清除。 */
+function prioControl(session, ctx) {
+  const row = el('div', 'prio-row');
+  row.title = '优先级：越靠右越高（白<绿<蓝<紫）。单击设定，再单击当前档清除。';
+  for (const lvl of PRIORITY_LEVELS) {
+    const active = session.priority === lvl;
+    const dot = el('button', `prio-dot p-${lvl}${active ? ' active' : ''}`);
+    dot.type = 'button';
+    dot.title = `设为「${PRIORITY_LABEL[lvl]}」优先级${active ? '（再点清除）' : ''}`;
+    dot.setAttribute('aria-label', `优先级 ${PRIORITY_LABEL[lvl]}`);
+    dot.addEventListener('click', (e) => {
+      e.stopPropagation(); // 不冒泡到卡头（避免同时展开/折叠）
+      ctx.onSetPriority(session.key, active ? null : lvl);
+    });
+    row.append(dot);
+  }
+  return row;
+}
+
 function card(session, ctx, now) {
-  const isOpen = ctx.expanded.has(session.key);
+  const isOpen = ctx.isOpen ? ctx.isOpen(session) : ctx.expanded.has(session.key);
   // 「刚完成」爆发：会话在爆发窗口内 → 加 .just-done 播放一次性特效。
   const justDone = ctx.justDone ? ctx.justDone.has(session.key) : false;
   const c = el(
@@ -192,6 +216,9 @@ function card(session, ctx, now) {
   // effort 分级：给卡片加 e-<level> class，驱动分级特效。
   const effort = normEffort(session.effort);
   if (effort) c.classList.add('e-' + effort);
+
+  // 优先级分级：给卡片加 p-<level> class（描边着色，避开被状态色占用的左边条/整卡染色）。
+  if (session.priority) c.classList.add('p-' + session.priority);
 
   const head = el('div', 'card-head');
   head.append(el('div', 'name', session.name || session.sessionId.slice(0, 8)));
@@ -214,6 +241,10 @@ function card(session, ctx, now) {
   head.append(el('div', 'agent agent-' + session.agent, AGENT_LABEL[session.agent] || session.agent));
   head.append(el('div', `badge s-${session.state}`, stateName(session.state)));
   head.append(el('div', 'caret', '▸'));
+
+  // 优先级色点控件：一排色点，左低右高（白绿蓝紫）。单击设色，单击当前档=清除。
+  // 卡头整体是展开开关，故每个点必须 stopPropagation（仿 enter-btn / summary）。
+  if (ctx.onSetPriority) head.append(prioControl(session, ctx));
 
   // 完整工作目录（可点击复制路径）。
   const cwd = session.cwd || session.project || '';
@@ -390,8 +421,27 @@ export function renderSessions(root, ctx) {
   }
 
   const now = Date.now() + ctx.serverSkewMs;
+
+  // 已指派优先级的会话：跨状态置顶为一个独立分区，按 rank 降序、同档最新在上。
+  const prioritized = filtered
+    .filter((s) => s.priority && PRIORITY_RANK[s.priority])
+    .sort((a, b) => {
+      const d = (PRIORITY_RANK[b.priority] || 0) - (PRIORITY_RANK[a.priority] || 0);
+      return d !== 0 ? d : (b.stateSince || 0) - (a.stateSince || 0);
+    });
+  if (prioritized.length > 0) {
+    const wrap = el('section', 'prioritized');
+    const title = el('div', 'section-title', '已标优先级');
+    title.append(el('span', 'count', String(prioritized.length)));
+    wrap.append(title);
+    for (const s of prioritized) wrap.append(card(s, ctx, now));
+    root.append(wrap);
+  }
+
+  // 其余（未标优先级）会话：沿用现有状态分区 + 区内最新在上。
+  const rest = filtered.filter((s) => !s.priority || !PRIORITY_RANK[s.priority]);
   for (const section of SECTIONS) {
-    const items = filtered
+    const items = rest
       .filter((s) => section.states.includes(s.state))
       .sort((a, b) => (b.stateSince || 0) - (a.stateSince || 0)); // 越新进入该状态的越靠上
     if (items.length === 0) continue;

@@ -12,6 +12,22 @@ let serverSkewMs = 0;
 const expanded = new Set();
 /** 展开了「详细时间线」小节的会话（保持折叠状态）。 */
 const timelineOpen = new Set();
+/**
+ * 折叠覆盖：key → boolean（true=用户强制展开，false=用户强制折叠）。
+ * 未记录的会话按 tier 默认：紫=默认展开，其余=默认折叠。
+ */
+const foldOverride = new Map();
+
+/** 该会话默认是否展开（紫色最高优先级默认完整展开，其余默认折叠）。 */
+function defaultOpen(s) {
+  return s ? s.priority === 'purple' : false;
+}
+/** 该会话当前是否展开：用户覆盖优先，否则按 tier 默认。 */
+function isOpen(s) {
+  if (!s) return false;
+  if (foldOverride.has(s.key)) return foldOverride.get(s.key);
+  return defaultOpen(s);
+}
 /** sessionId → { status:'loading'|'ok'|'error', events?:SessionEvent[] } */
 const timelines = new Map();
 
@@ -54,9 +70,11 @@ function doRender() {
     timelines,
     timelineOpen,
     justDone,
+    isOpen,
     onToggle: toggleSession,
     onRefetch: fetchTimeline,
     onFocus: focusSession,
+    onSetPriority: setPriority,
   });
 }
 
@@ -65,7 +83,7 @@ function doRender() {
 // 避免过渡期间的旧快照"冻结"住展开卡片的实时内容。
 function structuralSig() {
   const ids = [...sessions.keys()].sort();
-  return ids.map((id) => `${id}:${sessions.get(id).state}`).join('|');
+  return ids.map((id) => `${id}:${sessions.get(id).state}:${sessions.get(id).priority || ''}`).join('|');
 }
 let lastSig = '';
 let vtPending = false;
@@ -94,6 +112,25 @@ function render(force = false) {
       render(true);
     }
   });
+}
+
+// —— 优先级：POST /priority，乐观更新本地会话后重排（服务端会再广播权威值） ——
+async function setPriority(id, level) {
+  const s = sessions.get(id);
+  if (s) {
+    if (level) s.priority = level;
+    else delete s.priority;
+    render(true); // 乐观即时重排（结构性变化）
+  }
+  try {
+    await fetch(withToken(`/api/sessions/${encodeURIComponent(id)}/priority`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level }),
+    });
+  } catch {
+    /* 失败也无妨：服务端权威值会随下一次 SSE 覆盖回来 */
+  }
 }
 
 // —— 进入会话：POST /focus，把该会话的终端切到前台 ——
@@ -169,13 +206,15 @@ async function loadEvents(id) {
 }
 
 function toggleSession(id) {
-  if (expanded.has(id)) {
-    expanded.delete(id);
+  const s = sessions.get(id);
+  const nowOpen = isOpen(s);
+  // 记录显式覆盖：翻转当前（含 tier 默认）状态。
+  foldOverride.set(id, !nowOpen);
+  if (nowOpen) {
     render();
     return;
   }
-  expanded.add(id);
-  // 已有缓存则直接展示，否则拉取。
+  // 展开：已有缓存则直接展示，否则拉取时间线。
   const cached = timelines.get(id);
   if (!cached || cached.status === 'error') {
     fetchTimeline(id);
@@ -222,7 +261,7 @@ function connect() {
           triggerDoneBurst(id);
         }
         // 若该会话正展开且时间线已缓存，用推送里的 events 顺带刷新（若有）。
-        if (expanded.has(id) && Array.isArray(msg.session.events)) {
+        if (isOpen(sessions.get(id)) && Array.isArray(msg.session.events)) {
           timelines.set(id, { status: 'ok', events: msg.session.events });
         }
         render();
@@ -231,6 +270,7 @@ function connect() {
       case 'session.remove':
         sessions.delete(msg.key);
         expanded.delete(msg.key);
+        foldOverride.delete(msg.key);
         timelines.delete(msg.key);
         render();
         break;
@@ -261,6 +301,7 @@ function triggerDoneBurst(id) {
 /** 移除对已不存在会话的展开/缓存引用。 */
 function pruneStale() {
   for (const id of [...expanded]) if (!sessions.has(id)) expanded.delete(id);
+  for (const id of [...foldOverride.keys()]) if (!sessions.has(id)) foldOverride.delete(id);
   for (const id of [...timelines.keys()]) if (!sessions.has(id)) timelines.delete(id);
   // 会话消失时清理其爆发计时器，避免悬挂定时器对已删卡片调 render。
   for (const id of [...justDoneTimers.keys()]) {

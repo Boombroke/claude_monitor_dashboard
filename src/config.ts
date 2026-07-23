@@ -146,6 +146,14 @@ export function loadConfig(overrides: ConfigOverrides = {}): Config {
 
     redact: overrides.redact ?? (user.redact as boolean | undefined) ?? DEFAULTS.redact,
     maxContextChars: (user.maxContextChars as number | undefined) ?? DEFAULTS.maxContextChars,
+    providers: {
+      claude: { enabled: process.env.CCMON_ENABLE_CLAUDE !== '0' },
+      codex: {
+        enabled: process.env.CCMON_ENABLE_CODEX !== '0',
+        codexHome: process.env.CCMON_CODEX_HOME || join(homedir(), '.codex'),
+      },
+      opencode: { enabled: process.env.CCMON_ENABLE_OPENCODE !== '0' },
+    },
     ...(defaultEffort ? { defaultEffort } : {}),
 
     hookTtlMs: (user.hookTtlMs as number | undefined) ?? DEFAULTS.hookTtlMs,

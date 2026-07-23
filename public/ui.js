@@ -19,6 +19,13 @@ export const EFFORT_LABEL = {
   max: 'MAX',
 };
 
+// 代理类型标签（claude / codex / opencode）。
+export const AGENT_LABEL = {
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'opencode',
+};
+
 /** 归一化 effort 取值：ultracode→xhigh；max 为独立最高档；其余小写匹配已知档。 */
 export function normEffort(v) {
   if (!v) return null;
@@ -133,7 +140,7 @@ function stateName(st) {
 /** 渲染单会话的展开式时间线。 */
 function timelineEl(session, ctx) {
   const box = el('div', 'timeline');
-  const entry = ctx.timelines.get(session.sessionId);
+  const entry = ctx.timelines.get(session.key);
 
   if (!entry || entry.status === 'loading') {
     box.append(el('div', 'tl-msg', '加载时间线…'));
@@ -143,7 +150,7 @@ function timelineEl(session, ctx) {
     const err = el('div', 'tl-msg tl-err', '加载失败，点击重试');
     err.addEventListener('click', (e) => {
       e.stopPropagation();
-      ctx.onRefetch(session.sessionId);
+      ctx.onRefetch(session.key);
     });
     box.append(err);
     return box;
@@ -171,16 +178,16 @@ function timelineEl(session, ctx) {
 }
 
 function card(session, ctx, now) {
-  const isOpen = ctx.expanded.has(session.sessionId);
+  const isOpen = ctx.expanded.has(session.key);
   // 「刚完成」爆发：会话在爆发窗口内 → 加 .just-done 播放一次性特效。
-  const justDone = ctx.justDone ? ctx.justDone.has(session.sessionId) : false;
+  const justDone = ctx.justDone ? ctx.justDone.has(session.key) : false;
   const c = el(
     'div',
     `card s-${session.state}${isOpen ? ' expanded' : ''}${justDone ? ' just-done' : ''}`,
   );
-  c.dataset.sid = session.sessionId;
+  c.dataset.sid = session.key;
   // View Transitions：给每张卡片唯一名字，重排时自动补间位移。
-  c.style.viewTransitionName = 'card-' + cssId(session.sessionId);
+  c.style.viewTransitionName = 'card-' + cssId(session.key);
 
   // effort 分级：给卡片加 e-<level> class，驱动分级特效。
   const effort = normEffort(session.effort);
@@ -204,6 +211,7 @@ function card(session, ctx, now) {
     }
     head.append(eb);
   }
+  head.append(el('div', 'agent agent-' + session.agent, AGENT_LABEL[session.agent] || session.agent));
   head.append(el('div', `badge s-${session.state}`, stateName(session.state)));
   head.append(el('div', 'caret', '▸'));
 
@@ -238,7 +246,7 @@ function card(session, ctx, now) {
   const sub = subFootprintEl(session);
   if (sub) head.append(sub);
 
-  head.addEventListener('click', () => ctx.onToggle(session.sessionId));
+  head.addEventListener('click', () => ctx.onToggle(session.key));
   c.append(head);
 
   // 「进入」按钮：聚焦该会话的终端（不展开卡片，故 stopPropagation）。
@@ -249,7 +257,7 @@ function card(session, ctx, now) {
     enter.type = 'button';
     enter.addEventListener('click', (e) => {
       e.stopPropagation();
-      ctx.onFocus(session.sessionId, enter);
+      ctx.onFocus(session.key, enter);
     });
     actions.append(enter);
     c.append(actions);
@@ -260,14 +268,14 @@ function card(session, ctx, now) {
     // 状态时间线：默认折叠，避免一大把时间戳喧宾夺主。
     const details = el('details', 'tl-details');
     // 记住每个会话时间线的展开状态，重渲染后保持。
-    if (ctx.timelineOpen && ctx.timelineOpen.has(session.sessionId)) details.open = true;
+    if (ctx.timelineOpen && ctx.timelineOpen.has(session.key)) details.open = true;
     const summary = el('summary', 'tl-summary', '详细时间线');
     details.append(summary);
     details.addEventListener('toggle', (e) => {
       e.stopPropagation();
       if (!ctx.timelineOpen) return;
-      if (details.open) ctx.timelineOpen.add(session.sessionId);
-      else ctx.timelineOpen.delete(session.sessionId);
+      if (details.open) ctx.timelineOpen.add(session.key);
+      else ctx.timelineOpen.delete(session.key);
     });
     // summary 点击不要冒泡到卡片头（避免折叠整张卡）。
     summary.addEventListener('click', (e) => e.stopPropagation());

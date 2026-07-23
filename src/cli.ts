@@ -145,9 +145,21 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'install-opencode-plugin': {
+      const { installOpencodePlugin } = await import('./providers/opencode/plugin.ts');
+      const res = installOpencodePlugin();
+      process.stdout.write(
+        res.changed
+          ? `已安装 opencode 转发插件 → ${res.path}\n`
+          : `opencode 转发插件已是最新（${res.path}）\n`,
+      );
+      process.stdout.write('opencode 自动加载该目录下的插件；重启 opencode 后其会话即出现在 ccmon。\n');
+      break;
+    }
+
     default:
       process.stderr.write(
-        `未知命令：${command}\n用法：ccmon [start|status|doctor|install-hooks|uninstall-hooks]\n`,
+        `未知命令：${command}\n用法：ccmon [start|status|doctor|install-hooks|uninstall-hooks|install-opencode-plugin]\n`,
       );
       process.exit(1);
   }

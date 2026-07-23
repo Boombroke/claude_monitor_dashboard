@@ -6,7 +6,7 @@
  */
 
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
-import type { Config, Session, HookPayload, ServerEvent } from '../types.ts';
+import type { AgentKind, Config, Session, HookPayload, ServerEvent } from '../types.ts';
 import type { SessionStore } from '../types.ts';
 import { SseHub } from './sse.ts';
 import { isSea, readAsset, contentTypeFor, PUBLIC_ASSETS } from './assets.ts';
@@ -25,8 +25,8 @@ export interface HttpDeps {
   cfg: Config;
   store: SessionStore;
   hub: SseHub;
-  /** 收到 hook POST 时回调（reconciler 消费）。 */
-  onHook: (payload: HookPayload) => void;
+  /** 收到 provider 推送（/hooks=claude、/ingest/:agent）时分发给对应 provider。 */
+  dispatchPush: (agent: AgentKind, body: unknown) => void;
   /** 可选：持久化历史查询（M3）。 */
   history?: HistoryProvider;
   now?: () => number;
@@ -40,7 +40,7 @@ export interface HttpServer {
 }
 
 export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
-  const { cfg, store, hub, onHook, history } = deps;
+  const { cfg, store, hub, dispatchPush, history } = deps;
   const now = deps.now ?? Date.now;
   const app = Fastify({ logger: false, bodyLimit: 1_048_576 });
 
@@ -180,14 +180,24 @@ export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
     // 不 return，交由 SSE 保持连接打开。
   });
 
-  // —— Hook 接收 ——
+  // —— Hook 接收（Claude 遗留入口）——
   app.post('/hooks', async (req, reply) => {
     const body = req.body as HookPayload | undefined;
     if (!body || typeof body.hook_event_name !== 'string' || typeof body.session_id !== 'string') {
       return reply.code(400).send({ error: 'bad payload' });
     }
     // 绝不 info 级别记录 tool_input（可能含 secret）。
-    onHook(body);
+    dispatchPush('claude', body);
+    return reply.code(200).send({ ok: true });
+  });
+
+  // —— 通用 provider 推送入口（opencode 插件等）——
+  app.post('/ingest/:agent', async (req, reply) => {
+    const { agent } = req.params as { agent: string };
+    if (agent !== 'claude' && agent !== 'codex' && agent !== 'opencode') {
+      return reply.code(404).send({ error: 'unknown agent' });
+    }
+    dispatchPush(agent, req.body);
     return reply.code(200).send({ ok: true });
   });
 

@@ -292,7 +292,7 @@ section { margin-bottom: 8px; }
 .card-head {
   padding: 14px 16px 14px 18px;
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto;
   gap: 5px 10px;
   align-items: center;
   cursor: pointer;
@@ -514,6 +514,26 @@ section { margin-bottom: 8px; }
 }
 /* 全局默认值：虚线边框 + 降透明，暗示"非精确" */
 .effort.effort-default { border-style: dashed; opacity: 0.7; }
+
+/* ——————————————————————————— 代理类型徽章（agent badge）——————————————————————————— */
+
+.agent {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  justify-self: end;
+  opacity: 0.8;
+}
+/* Claude：暖橙（Anthropic 品牌色调） */
+.agent-claude  { background: rgba(249, 115, 22, 0.12); color: #f97316; border-color: rgba(249, 115, 22, 0.28); }
+/* Codex：清青（OpenAI 中性基调） */
+.agent-codex   { background: rgba(20, 184, 166, 0.12);  color: #14b8a6; border-color: rgba(20, 184, 166, 0.28); }
+/* opencode：靛蓝紫 */
+.agent-opencode { background: rgba(129, 140, 248, 0.12); color: #818cf8; border-color: rgba(129, 140, 248, 0.28); }
 
 /* —— 分级卡片特效：档位越高越"热" —— */
 /* medium：左边框略亮 */

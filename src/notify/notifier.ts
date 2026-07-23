@@ -117,7 +117,7 @@ export class Notifier implements NotifierInterface {
   ): Promise<void> {
     const at = this.now();
     const bucket = Math.floor(at / this.cfg.notifyCooldownMs);
-    const key = `${session.sessionId}:${session.state}:${bucket}`;
+    const key = `${session.key}:${session.state}:${bucket}`;
 
     // 去重：冷却期内同键丢弃。
     const prev = this.lastSent.get(key);
@@ -156,7 +156,7 @@ export class Notifier implements NotifierInterface {
 
     for (const ch of this.channels) {
       const n: Notification = {
-        key: `${session.sessionId}:${session.state}`,
+        key: `${session.key}:${session.state}`,
         sessionId: session.sessionId,
         class: spec.class,
         priority: spec.priority,

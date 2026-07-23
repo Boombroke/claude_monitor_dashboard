@@ -34,6 +34,9 @@ export const ATTENTION_STATES: ReadonlySet<SessionState> = new Set<SessionState>
   'DONE_WAITING',
 ]);
 
+/** 产生该会话的 agent CLI 种类。多 provider 共存时用于 UI 徽章、通知路由、键命名空间。 */
+export type AgentKind = 'claude' | 'codex' | 'opencode';
+
 /** Claude 会话文件里的原始 status 枚举（实测：busy/idle/waiting；binary 另含更多）。 */
 export type FileStatus = 'busy' | 'idle' | 'waiting';
 
@@ -54,6 +57,8 @@ export type PermissionMode =
 export interface Session {
   // —— 身份 ——
   sessionId: string; // KEY：稳定 UUID（= transcript 文件名去掉 .jsonl）
+  agent: AgentKind; // 产生该会话的 agent CLI（claude/codex/opencode）
+  key: string; // 跨模块唯一键 = `${agent}:${sessionId}`（store/SSE/history/REST 用）
   pid: number | null; // 当前存活 pid（介于两次 resume 之间可能为 null）
   pastPids: number[]; // 历史 pid（resume 追踪）
   name: string; // 会话文件里的人类可读名
@@ -98,6 +103,7 @@ export interface Session {
   isAlive: boolean;
   needsAttention: boolean; // ATTENTION_STATES.has(state)
   attentionReason?: string; // 供 UI/通知展示的原因
+  stateDetail?: string; // 状态细节（如 opencode 重试次数），仅展示、不影响权威 state
 
   // —— 时间线 ——
   events: SessionEvent[]; // 环形缓冲（最近 ~50 条，已脱敏）
@@ -262,7 +268,7 @@ export interface SessionUpdateEvent {
 /** 会话移除（DEAD 淡出后彻底移除）。 */
 export interface SessionRemoveEvent {
   type: 'session.remove';
-  sessionId: string;
+  key: string; // 复合键 `${agent}:${sessionId}`
 }
 
 /** 通知广播（前端可做前台提示 / 声音）。 */
@@ -328,20 +334,20 @@ export interface NotificationChannel {
 /** store 变更事件（server/notifier 订阅）。 */
 export type StoreChange =
   | { type: 'upsert'; session: Session; prev?: SessionState }
-  | { type: 'remove'; sessionId: string };
+  | { type: 'remove'; key: string };
 
 export type StoreListener = (change: StoreChange) => void;
 
-/** 会话存储：sessionId 为键，维护 pid 副索引与 resume 重连。 */
+/** 会话存储：复合 key 为键，维护 pid 副索引与 resume 重连。 */
 export interface SessionStore {
-  get(sessionId: string): Session | undefined;
+  get(key: string): Session | undefined;
   getByPid(pid: number): Session | undefined;
   all(): Session[];
   /** upsert 并触发监听器；返回更新后的 Session。 */
-  upsert(sessionId: string, patch: Partial<Session>): Session;
+  upsert(key: string, patch: Partial<Session>): Session;
   /** 应用状态转移（会写入 events 时间线并更新 stateSince/needsAttention）。 */
-  setState(sessionId: string, state: SessionState, reason?: string): Session | undefined;
-  remove(sessionId: string): void;
+  setState(key: string, state: SessionState, reason?: string): Session | undefined;
+  remove(key: string): void;
   subscribe(listener: StoreListener): () => void;
 }
 
@@ -405,6 +411,13 @@ export interface Config {
   redact: boolean;
   /** 上下文字段截断长度（lastPrompt / summary / title）。 */
   maxContextChars: number; // 默认 120
+
+  /** 启用的 agent provider（缺省仅 claude）。 */
+  providers?: {
+    claude?: { enabled: boolean };
+    codex?: { enabled: boolean; codexHome: string };
+    opencode?: { enabled: boolean };
+  };
 
   /** 全局默认 effort（读自 ~/.claude/settings.json 的 effortLevel），会话未收到 hook 时兜底。 */
   defaultEffort?: string;

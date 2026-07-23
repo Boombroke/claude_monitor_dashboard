@@ -1,8 +1,8 @@
 /**
  * store.ts — SessionStore 实现。
  *
- * 键 = sessionId（稳定 UUID）。维护 Map<pid, sessionId> 副索引，供文件/存活性
- * 事件从 pid 快速定位会话。--resume 会用新 pid 复用同一 sessionId，此时更新
+ * 键 = 复合 key（`${agent}:${sessionId}`）。维护 Map<pid, key> 副索引，供文件/存活性
+ * 事件从 pid 快速定位会话。--resume 会用新 pid 复用同一 key，此时更新
  * pid/pastPids 而非新建。
  *
  * upsert/setState 会触发订阅者（server SSE、notifier）。setState 负责写入 events
@@ -36,21 +36,21 @@ export class InMemorySessionStore implements SessionStore {
     this.now = opts.now ?? Date.now;
   }
 
-  get(sessionId: string): Session | undefined {
-    return this.sessions.get(sessionId);
+  get(key: string): Session | undefined {
+    return this.sessions.get(key);
   }
 
   getByPid(pid: number): Session | undefined {
-    const id = this.pidIndex.get(pid);
-    return id ? this.sessions.get(id) : undefined;
+    const key = this.pidIndex.get(pid);
+    return key ? this.sessions.get(key) : undefined;
   }
 
   all(): Session[] {
     return [...this.sessions.values()];
   }
 
-  upsert(sessionId: string, patch: Partial<Session>): Session {
-    const existing = this.sessions.get(sessionId);
+  upsert(key: string, patch: Partial<Session>): Session {
+    const existing = this.sessions.get(key);
     const prevState = existing?.state;
 
     if (existing) {
@@ -60,7 +60,7 @@ export class InMemorySessionStore implements SessionStore {
           existing.pastPids.push(existing.pid);
         }
         if (existing.pid !== null) this.pidIndex.delete(existing.pid);
-        this.pidIndex.set(patch.pid, sessionId);
+        this.pidIndex.set(patch.pid, key);
       }
       Object.assign(existing, patch);
       // needsAttention 始终由 state 派生，避免 patch 带入不一致值。
@@ -69,15 +69,15 @@ export class InMemorySessionStore implements SessionStore {
       return existing;
     }
 
-    const created = this.materialize(sessionId, patch);
-    this.sessions.set(sessionId, created);
-    if (created.pid !== null) this.pidIndex.set(created.pid, sessionId);
+    const created = this.materialize(key, patch);
+    this.sessions.set(key, created);
+    if (created.pid !== null) this.pidIndex.set(created.pid, key);
     this.emit({ type: 'upsert', session: created });
     return created;
   }
 
-  setState(sessionId: string, state: SessionState, reason?: string): Session | undefined {
-    const s = this.sessions.get(sessionId);
+  setState(key: string, state: SessionState, reason?: string): Session | undefined {
+    const s = this.sessions.get(key);
     if (!s) return undefined;
     if (s.state === state) {
       // 无状态变化：仅在 reason 变化时更新，不推时间线事件。
@@ -100,15 +100,15 @@ export class InMemorySessionStore implements SessionStore {
     return s;
   }
 
-  remove(sessionId: string): void {
-    const s = this.sessions.get(sessionId);
+  remove(key: string): void {
+    const s = this.sessions.get(key);
     if (!s) return;
     if (s.pid !== null) this.pidIndex.delete(s.pid);
     for (const p of s.pastPids) {
-      if (this.pidIndex.get(p) === sessionId) this.pidIndex.delete(p);
+      if (this.pidIndex.get(p) === key) this.pidIndex.delete(p);
     }
-    this.sessions.delete(sessionId);
-    this.emit({ type: 'remove', sessionId });
+    this.sessions.delete(key);
+    this.emit({ type: 'remove', key });
   }
 
   subscribe(listener: StoreListener): () => void {
@@ -134,12 +134,15 @@ export class InMemorySessionStore implements SessionStore {
     }
   }
 
-  /** 用默认值补齐一个新 Session。 */
-  private materialize(sessionId: string, patch: Partial<Session>): Session {
+  /** 用默认值补齐一个新 Session。agent/sessionId/key 由调用方（sink）在 patch 中提供。 */
+  private materialize(key: string, patch: Partial<Session>): Session {
     const at = this.now();
     const state: SessionState = patch.state ?? 'IDLE';
+    const sessionId = patch.sessionId ?? key;
     const base: Session = {
       sessionId,
+      agent: patch.agent ?? 'claude',
+      key,
       pid: patch.pid ?? null,
       pastPids: patch.pastPids ?? [],
       name: patch.name ?? sessionId.slice(0, 8),
@@ -178,6 +181,7 @@ export class InMemorySessionStore implements SessionStore {
       'workflowActive',
       'model',
       'attentionReason',
+      'stateDetail',
     ];
     for (const k of optional) {
       const v = patch[k];

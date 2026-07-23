@@ -1,24 +1,23 @@
 /**
  * index.ts — 组装并启动 ccmon 守护进程。
  *
- * 接线：config → store → reconciler → manager → sessionsWatcher + transcriptTailer
- *        + liveness reaper + notifier(desktop/ntfy) → http(SSE + REST + hooks 接收)。
+ * 接线：config → store → hub(commit/debounce/fan-out) + notifier + history
+ *        → 启用的 providers（各自 start(sink)）→ http(SSE + REST + /hooks + /ingest)。
  */
 
-import type { Config, HookPayload, NotificationChannel } from './types.ts';
+import type { AgentKind, Config, NotificationChannel } from './types.ts';
 import { InMemorySessionStore } from './core/store.ts';
-import { DefaultReconciler } from './core/reconciler.ts';
-import { SessionManager } from './core/manager.ts';
-import { SessionsWatcher } from './watch/sessionsWatcher.ts';
-import { TranscriptTailer } from './watch/transcriptTailer.ts';
-import { SubagentWatcher } from './watch/subagentWatcher.ts';
-import { LivenessReaper } from './core/liveness.ts';
+import { Hub } from './core/hub.ts';
 import { SseHub } from './server/sse.ts';
 import { createHttpServer } from './server/http.ts';
 import { Notifier } from './notify/notifier.ts';
 import { DesktopChannel } from './notify/desktop.ts';
 import { NtfyChannel } from './notify/ntfy.ts';
 import { History } from './db/history.ts';
+import type { Provider } from './providers/types.ts';
+import { ClaudeProvider } from './providers/claude/provider.ts';
+import { CodexProvider } from './providers/codex/provider.ts';
+import { OpencodeProvider } from './providers/opencode/provider.ts';
 
 export interface RunningServer {
   url: string;
@@ -27,8 +26,7 @@ export interface RunningServer {
 
 export async function startDaemon(cfg: Config): Promise<RunningServer> {
   const store = new InMemorySessionStore();
-  const reconciler = new DefaultReconciler({ hookTtlMs: cfg.hookTtlMs });
-  const hub = new SseHub();
+  const sse = new SseHub();
 
   // 历史持久化（node:sqlite）。失败不致命：降级为无持久化。
   let history: History | undefined;
@@ -37,17 +35,6 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
   } catch {
     history = undefined;
   }
-
-  // transcript tailer：抽取标记喂给 manager。先声明，稍后由 manager 的
-  // onTrack/onUntrack 驱动它跟踪/停止会话。
-  const tailer = new TranscriptTailer(cfg, {
-    onMarkers: (markers) => manager.onMarkers(markers),
-  });
-
-  // 子代理/workflow 遥测采集：token 足迹 + workflow 活动。
-  const subagents = new SubagentWatcher(cfg, {
-    onStats: (s) => manager.onSubagentStats(s),
-  });
 
   // 通知渠道：桌面（受配置开关）+ ntfy（仅当配置了 topic）。
   const channels: NotificationChannel[] = [new DesktopChannel(cfg.desktopNotifications)];
@@ -63,65 +50,50 @@ export async function startDaemon(cfg: Config): Promise<RunningServer> {
   }
   const notifier = new Notifier(cfg, channels, {
     broadcast: (view) => {
-      hub.broadcast({ type: 'notification', notification: view });
+      sse.broadcast({ type: 'notification', notification: view });
       history?.recordNotification(view);
     },
   });
 
-  // manager 需要 broadcast，而 http 需要 onHook（由 manager 提供）——先声明 manager。
-  let onHookRef: (p: HookPayload) => void = () => {};
-  const manager: SessionManager = new SessionManager({
+  // 内核提交引擎：store 变更 → SSE 广播 + 通知 + 历史。
+  const hub = new Hub({
     cfg,
     store,
-    reconciler,
     notifier,
-    broadcast: (event) => hub.broadcast(event),
-    onTrack: (sessionId, sessionCwd) => {
-      tailer.track(sessionId, sessionCwd);
-      subagents.track(sessionId, sessionCwd);
-    },
-    onUntrack: (sessionId) => {
-      tailer.untrack(sessionId);
-      subagents.untrack(sessionId);
-    },
+    broadcast: (event) => sse.broadcast(event),
     onStateTransition: (session, from) =>
-      history?.recordTransition(session.sessionId, session.stateSince, from, session.state, session.attentionReason),
+      history?.recordTransition(session.key, session.stateSince, from, session.state, session.attentionReason),
   });
-  onHookRef = (p) => manager.onHook(p);
+
+  // 构建启用的 providers（claude 文件监听 · codex rollout 尾读 · opencode 插件推送）。
+  const providers = new Map<AgentKind, Provider>();
+  if (cfg.providers?.claude?.enabled ?? true) {
+    providers.set('claude', new ClaudeProvider(cfg));
+  }
+  if (cfg.providers?.codex?.enabled) {
+    providers.set('codex', new CodexProvider(cfg));
+  }
+  if (cfg.providers?.opencode?.enabled) {
+    providers.set('opencode', new OpencodeProvider(cfg));
+  }
 
   const http = await createHttpServer({
     cfg,
     store,
-    hub,
-    onHook: (p) => onHookRef(p),
+    hub: sse,
+    dispatchPush: (agent, body) => providers.get(agent)?.onPush?.(body),
     ...(history ? { history } : {}),
   });
 
-  const watcher = new SessionsWatcher(cfg, {
-    onUpsert: (snap) => manager.onFileSnapshot(snap),
-    onRemove: (pid) => manager.onFileRemoved(pid),
-  });
-
-  const reaper = new LivenessReaper({
-    intervalMs: 5_000,
-    deadThreshold: 2,
-    getPids: () => manager.livePids(),
-    onDead: (pid) => manager.onPidDead(pid),
-  });
-
-  await tailer.start();
-  await subagents.start();
-  await watcher.start();
-  reaper.start();
+  for (const [agent, provider] of providers) {
+    await provider.start(hub.makeSink(agent));
+  }
   const url = await http.listen();
 
   return {
     url,
     async stop() {
-      reaper.stop();
-      await watcher.stop();
-      await tailer.stop();
-      await subagents.stop();
+      for (const provider of providers.values()) await provider.stop();
       await http.close();
       history?.close();
     },

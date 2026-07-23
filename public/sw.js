@@ -1,5 +1,5 @@
 // ccmon service worker — M1 极简版：缓存 app 壳，处理 push（M3 接入 Web Push）。
-const CACHE = 'ccmon-v14';
+const CACHE = 'ccmon-v15';
 const SHELL = ['/', '/index.html', '/app.js', '/ui.js', '/styles.css', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

@@ -29,8 +29,11 @@ class FakeChannel implements NotificationChannel {
 }
 
 function makeSession(state: SessionState, over: Partial<Session> = {}): Session {
+  const sessionId = over.sessionId ?? 'sid-1';
   return {
-    sessionId: over.sessionId ?? 'sid-1',
+    sessionId,
+    agent: over.agent ?? 'claude',
+    key: over.key ?? `claude:${sessionId}`,
     pid: 111,
     pastPids: [],
     name: over.name ?? 'proj-a',

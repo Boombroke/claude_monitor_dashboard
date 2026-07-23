@@ -4,7 +4,7 @@
 import { ALL_STATES, STATE_LABEL, DONE_BURST_MS, renderSessions, tickDurations, el } from './ui.js';
 
 // —— 全局状态 ——
-/** sessionId → Session */
+/** key（`${agent}:${sessionId}`）→ Session */
 const sessions = new Map();
 let serverSkewMs = 0;
 
@@ -206,13 +206,13 @@ function connect() {
     switch (msg.type) {
       case 'snapshot':
         sessions.clear();
-        for (const s of msg.sessions) sessions.set(s.sessionId, s);
+        for (const s of msg.sessions) sessions.set(s.key, s);
         if (msg.serverTime) serverSkewMs = msg.serverTime - Date.now();
         pruneStale();
         render();
         break;
       case 'session.update': {
-        const id = msg.session.sessionId;
+        const id = msg.session.key;
         const prev = sessions.get(id);
         sessions.set(id, msg.session);
         // 只有「真实转换进入完成态」才触发爆发：旧态存在且非 DONE_WAITING、
@@ -229,9 +229,9 @@ function connect() {
         break;
       }
       case 'session.remove':
-        sessions.delete(msg.sessionId);
-        expanded.delete(msg.sessionId);
-        timelines.delete(msg.sessionId);
+        sessions.delete(msg.key);
+        expanded.delete(msg.key);
+        timelines.delete(msg.key);
         render();
         break;
       case 'notification':

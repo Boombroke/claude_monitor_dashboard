@@ -88,6 +88,17 @@ function structuralSig() {
 let lastSig = '';
 let vtPending = false;
 let vtDirty = false;
+
+// renderSessions() 每次都 `#app.textContent=''` 整树重建，DOM 高度会瞬间塌成 0，
+// 整页（window）的滚动位置随之被顶到顶部。故渲染前后夹一层滚动位置的保存/恢复：
+// 记下 scrollY，渲染完立即还原，肉眼无跳动。SSE 后台重渲染时用户滚动位置得以保持。
+function renderKeepingScroll(fn) {
+  const y = window.scrollY;
+  fn();
+  // 内容一般等高，直接还原即可；用 'instant' 避免与 View Transition 的位移动画打架。
+  if (window.scrollY !== y) window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+}
+
 function render(force = false) {
   const sig = structuralSig();
   const structural = force || sig !== lastSig;
@@ -95,7 +106,7 @@ function render(force = false) {
 
   // 非结构性变化（只是内容更新）→ 直接渲染，实时、不冻结。
   if (!structural || typeof document.startViewTransition !== 'function') {
-    doRender();
+    renderKeepingScroll(doRender);
     return;
   }
   // 结构性变化 → View Transition 丝滑重排。
@@ -104,7 +115,7 @@ function render(force = false) {
     return;
   }
   vtPending = true;
-  const vt = document.startViewTransition(() => doRender());
+  const vt = document.startViewTransition(() => renderKeepingScroll(doRender));
   vt.finished.finally(() => {
     vtPending = false;
     if (vtDirty) {
@@ -249,6 +260,7 @@ function connect() {
         if (msg.serverTime) serverSkewMs = msg.serverTime - Date.now();
         pruneStale();
         render();
+        restoreScrollOnce(); // 首帧快照渲染后，恢复 F5 前的滚动位置（仅一次）
         break;
       case 'session.update': {
         const id = msg.session.key;
@@ -409,6 +421,66 @@ function initInstall() {
     deferredInstall = null;
     btnInstall.hidden = true;
   });
+}
+
+// —— 滚动位置跨刷新保持（F5 / Ctrl-R） ——
+// 浏览器默认的滚动恢复发生在 DOM 就绪时，但会话列表要等 SSE 快照异步到达才渲染，
+// 那一刻 #app 还是空的、页面没高度，恢复必然落空停在顶部。故改为手动恢复：
+// 持续把 scrollY 存进 sessionStorage，首帧快照渲染出内容后再还原一次。
+const SCROLL_KEY = 'ccmon.scrollY';
+let scrollRestored = false;
+if ('scrollRestoration' in history) {
+  try {
+    history.scrollRestoration = 'manual'; // 关掉浏览器自带恢复，避免与手动恢复打架
+  } catch {
+    /* ignore */
+  }
+}
+// 记录滚动位置：滚动时（下一帧合并写入）+ 页面隐藏时兜底。
+let scrollSaveScheduled = false;
+function saveScrollSoon() {
+  if (scrollSaveScheduled) return;
+  scrollSaveScheduled = true;
+  requestAnimationFrame(() => {
+    scrollSaveScheduled = false;
+    try {
+      sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+    } catch {
+      /* 隐私模式等禁用 storage：放弃保持，不致命 */
+    }
+  });
+}
+window.addEventListener('scroll', saveScrollSoon, { passive: true });
+window.addEventListener('pagehide', () => {
+  try {
+    sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+  } catch {
+    /* ignore */
+  }
+});
+// 首帧快照渲染后恢复一次。内容随卡片渲染逐步变高，故用 rAF 重试直到页面够高（或超时）。
+function restoreScrollOnce() {
+  if (scrollRestored) return;
+  scrollRestored = true;
+  let target = 0;
+  try {
+    target = Number(sessionStorage.getItem(SCROLL_KEY)) || 0;
+  } catch {
+    target = 0;
+  }
+  if (target <= 0) return;
+  let tries = 0;
+  const tick = () => {
+    // 页面已足够高、能滚到目标 → 恢复；否则等下一帧内容继续渲染。
+    const maxY = document.documentElement.scrollHeight - window.innerHeight;
+    if (maxY >= target || tries >= 30) {
+      window.scrollTo({ top: target, left: 0, behavior: 'instant' });
+      return;
+    }
+    tries++;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 // —— 启动 ——

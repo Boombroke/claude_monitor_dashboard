@@ -357,15 +357,82 @@ async function openNewTerminalLinux(cwd: string): Promise<boolean> {
   return false;
 }
 
+/** 取路径末段（项目名），用于匹配编辑器窗口标题。去掉尾部斜杠。 */
+export function basenameOf(p: string): string {
+  const trimmed = p.replace(/\/+$/, '');
+  const i = trimmed.lastIndexOf('/');
+  return i === -1 ? trimmed : trimmed.slice(i + 1);
+}
+
+/**
+ * 从编辑器窗口标题里取「项目名」段。VS Code/Cursor 标题格式为
+ *   "<当前文件> - <项目> - Visual Studio Code"（无文件时退化为 "<项目> - Visual Studio Code"）。
+ * 项目名恒为「应用名之前的那一段」。故按 " - " 切分，取倒数第二段。
+ * 不能用裸子串匹配——项目名可能同时作为「另一个项目里打开的文件名」出现在别的窗口标题里
+ * （实测撞名：linux-userspace 项目打开名为 mondo-app 的文件 → 标题含 "mondo-app"）。
+ */
+export function editorTitleProject(title: string): string {
+  const segs = title.replace(/^[●*\s]+/, '').split(' - ');
+  if (segs.length < 2) return '';
+  return (segs[segs.length - 2] ?? '').trim();
+}
+
+/**
+ * X11：在编辑器祖先链拥有的顶层窗口里，挑「项目名段 == cwd basename」的那个激活。
+ *
+ * 为什么按标题的项目名段、而非直接按 pid：一个 VS Code 进程常同时开多个项目窗口
+ * （实测 pid 相同、仅标题不同）。按 pid 只会激活第一个匹配窗口，未必是会话 cwd 对应的
+ * 项目。故用 wmctrl 读 "0xID desktop pid host title"，在 pid ∈ 祖先链 且 标题项目名段
+ * 精确等于 cwd basename 的窗口里命中——实测可 100% 激活正确窗口，且不被撞名文件误导。
+ * 仅 X11 有效（Wayland 下 wmctrl 看不到原生客户端）；命中返回 true。
+ */
+async function tryFocusEditorWindowByCwd(pids: number[], cwd: string): Promise<boolean> {
+  if (!process.env.DISPLAY || !cwd) return false;
+  const project = basenameOf(cwd).toLowerCase();
+  if (!project) return false;
+  if (!(await hasBin('wmctrl'))) return false;
+  try {
+    const { stdout } = await execFileP('wmctrl', ['-l', '-p'], { timeout: 2000 });
+    for (const line of stdout.split('\n')) {
+      // 前 4 列固定：0xID desktop pid host；其余为标题（可能含空格）。
+      const m = line.match(/^(\S+)\s+\S+\s+(\d+)\s+\S+\s+(.*)$/);
+      if (!m) continue;
+      const wid = m[1]!;
+      const wpid = Number(m[2]);
+      const title = m[3] ?? '';
+      if (
+        Number.isInteger(wpid) &&
+        pids.includes(wpid) &&
+        editorTitleProject(title).toLowerCase() === project
+      ) {
+        await execFileP('wmctrl', ['-i', '-a', wid], { timeout: 2000 });
+        return true;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 async function focusLinux(pid: number | null, cwd: string): Promise<FocusResult> {
   if (pid !== null) {
-    // 1) 宿主是编辑器 → 用其 CLI 聚焦工作目录窗口。
+    // 1) 宿主是编辑器（VS Code/Cursor…）。
     const editor = await hostEditor(pid);
     if (editor) {
-      const activated = await activateEditorLinux(linuxCliOf(editor), cwd);
-      if (activated) return { ok: true, method: 'activated-editor' };
+      // 1a) 先用 CLI：把目标项目窗口带到当前工作区（它认得 cwd），必要时新建窗口。
+      const cliOk = await activateEditorLinux(linuxCliOf(editor), cwd);
+      // 1b) X11 下再按「祖先 pid + cwd 项目名标题」精确激活正确的编辑器窗口，
+      //     拿到真实聚焦证据（CLI 的退出码不代表窗口真的到了前台）。
+      const pids = await ancestorPids(pid);
+      if (await tryFocusEditorWindowByCwd(pids, cwd)) {
+        return { ok: true, method: 'activated-editor' };
+      }
+      // 1c) 无法验证真实聚焦（如 Wayland：wmctrl 看不到原生窗口）。CLI 成功则乐观返回，
+      //     行为与旧版一致、不倒退；GNOME+Wayland 仍受显示服务器限制（可能只高亮）。
+      if (cliOk) return { ok: true, method: 'activated-editor' };
     }
-    // 2) 尝试按 pid 精确聚焦终端窗口（X11 / sway / Hyprland）。
+    // 2) 非编辑器宿主：按 pid 精确聚焦终端窗口（X11 / sway / Hyprland）。
     const focused = await tryFocusByPid(pid);
     if (focused) return { ok: true, method: 'focused-tab' };
   }

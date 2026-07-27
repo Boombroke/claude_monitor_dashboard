@@ -26,10 +26,10 @@ export const AGENT_LABEL = {
   opencode: 'opencode',
 };
 
-// 优先级色阶（低→高：白<绿<蓝<紫）。rank 用于排序，label 用于 title 提示。
-export const PRIORITY_LEVELS = ['white', 'green', 'blue', 'purple'];
-export const PRIORITY_RANK = { white: 1, green: 2, blue: 3, purple: 4 };
-export const PRIORITY_LABEL = { white: '白', green: '绿', blue: '蓝', purple: '紫' };
+// 优先级色阶（低→高：白<绿<蓝<紫<黄<红）。rank 用于排序，label 用于 title 提示。
+export const PRIORITY_LEVELS = ['white', 'green', 'blue', 'purple', 'yellow', 'red'];
+export const PRIORITY_RANK = { white: 1, green: 2, blue: 3, purple: 4, yellow: 5, red: 6 };
+export const PRIORITY_LABEL = { white: '白', green: '绿', blue: '蓝', purple: '紫', yellow: '黄', red: '红' };
 
 /** 归一化 effort 取值：ultracode→xhigh；max 为独立最高档；其余小写匹配已知档。 */
 export function normEffort(v) {

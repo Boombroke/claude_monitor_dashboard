@@ -20,11 +20,13 @@
   --idle: #52525b;          /* zinc-600 */
   --dead: #3f3f46;
 
-  /* 优先级色阶（低→高：白<绿<蓝<紫）。与状态色语义解耦，即使部分色值相同。 */
+  /* 优先级色阶（低→高：白<绿<蓝<紫<黄<红）。与状态色语义解耦，即使部分色值相同。 */
   --prio-white: #f4f4f5;
   --prio-green: #22c55e;
   --prio-blue: #3b82f6;
   --prio-purple: #a855f7;
+  --prio-yellow: #eab308;
+  --prio-red: #ef4444;
 
   /* —— 尺度 —— */
   --radius: 12px;
@@ -852,6 +854,12 @@ section.prioritized > .section-title {
 .prio-dot.p-purple {
   background: var(--prio-purple);
 }
+.prio-dot.p-yellow {
+  background: var(--prio-yellow);
+}
+.prio-dot.p-red {
+  background: var(--prio-red);
+}
 /* 当前选中的档位：实心高亮 + 光环。 */
 .prio-dot.active {
   opacity: 1;
@@ -873,11 +881,23 @@ section.prioritized > .section-title {
   outline: 1px solid color-mix(in srgb, var(--prio-blue) 70%, transparent);
   outline-offset: -1px;
 }
-/* 紫（最高）：更醒目的实描边 + 柔光。 */
+/* 紫（高）：更醒目的实描边 + 柔光。 */
 .card.p-purple {
   outline: 1.5px solid var(--prio-purple);
   outline-offset: -1px;
   box-shadow: 0 0 14px -2px color-mix(in srgb, var(--prio-purple) 45%, transparent);
+}
+/* 黄（高）：实描边 + 柔光。 */
+.card.p-yellow {
+  outline: 1.5px solid var(--prio-yellow);
+  outline-offset: -1px;
+  box-shadow: 0 0 14px -2px color-mix(in srgb, var(--prio-yellow) 45%, transparent);
+}
+/* 红（最高）：最醒目——更粗实描边 + 更强柔光。 */
+.card.p-red {
+  outline: 2px solid var(--prio-red);
+  outline-offset: -1px;
+  box-shadow: 0 0 18px -2px color-mix(in srgb, var(--prio-red) 55%, transparent);
 }
 
 /* 窄屏：色点控件保持可见，略缩小间距。 */

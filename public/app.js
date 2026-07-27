@@ -1,7 +1,7 @@
 // ccmon PWA — M3 版（零依赖 vanilla JS ES module，消费 SSE）。
 // 状态 + SSE + 过滤 + 时间线拉取 + 通知 + 安装提示；渲染委托给 ui.js。
 
-import { ALL_STATES, STATE_LABEL, DONE_BURST_MS, renderSessions, tickDurations, el } from './ui.js';
+import { ALL_STATES, STATE_LABEL, DONE_BURST_MS, PRIORITY_RANK, renderSessions, tickDurations, el } from './ui.js';
 
 // —— 全局状态 ——
 /** key（`${agent}:${sessionId}`）→ Session */
@@ -14,13 +14,15 @@ const expanded = new Set();
 const timelineOpen = new Set();
 /**
  * 折叠覆盖：key → boolean（true=用户强制展开，false=用户强制折叠）。
- * 未记录的会话按 tier 默认：紫=默认展开，其余=默认折叠。
+ * 未记录的会话按 tier 默认：高优先级（紫/黄/红）默认展开，其余默认折叠。
  */
 const foldOverride = new Map();
 
-/** 该会话默认是否展开（紫色最高优先级默认完整展开，其余默认折叠）。 */
+/** 高优先级默认完整展开的门槛（rank ≥ 紫=4，即 紫/黄/红），其余默认折叠。 */
+const DEFAULT_OPEN_MIN_RANK = 4;
+/** 该会话默认是否展开。 */
 function defaultOpen(s) {
-  return s ? s.priority === 'purple' : false;
+  return s && s.priority ? (PRIORITY_RANK[s.priority] || 0) >= DEFAULT_OPEN_MIN_RANK : false;
 }
 /** 该会话当前是否展开：用户覆盖优先，否则按 tier 默认。 */
 function isOpen(s) {

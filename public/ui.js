@@ -449,12 +449,13 @@ export function renderSessions(root, ctx) {
     root.append(wrap);
   }
 
-  // 其余（蓝及以下）会话：沿用现有状态分区 + 区内最新在上。
+  // 其余（蓝及以下）会话：沿用现有状态分区，区内先按优先级降序、再按最新在上。
+  // （调低优先级后需下沉到同分区低优先级卡片之下——故优先级是主排序键，不能只按时间。）
   const rest = filtered.filter((s) => rankOf(s) <= baseRank);
   for (const section of SECTIONS) {
     const items = rest
       .filter((s) => section.states.includes(s.state))
-      .sort((a, b) => (b.stateSince || 0) - (a.stateSince || 0)); // 越新进入该状态的越靠上
+      .sort((a, b) => rankOf(b) - rankOf(a) || (b.stateSince || 0) - (a.stateSince || 0));
     if (items.length === 0) continue;
     const wrap = el('section', section.key === 'attention' ? 'attention' : '');
     const title = el('div', 'section-title', section.title);

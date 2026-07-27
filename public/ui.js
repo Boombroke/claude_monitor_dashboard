@@ -31,6 +31,14 @@ export const PRIORITY_LEVELS = ['white', 'green', 'blue', 'purple', 'yellow', 'r
 export const PRIORITY_RANK = { white: 1, green: 2, blue: 3, purple: 4, yellow: 5, red: 6 };
 export const PRIORITY_LABEL = { white: '白', green: '绿', blue: '蓝', purple: '紫', yellow: '黄', red: '红' };
 
+// 每个会话默认优先级 = 蓝（rank 3）。不允许清除——色点只在 6 档间切换，恒有一档 active。
+export const DEFAULT_PRIORITY = 'blue';
+/** 会话的有效优先级：用户显式指派优先，否则回落到默认（蓝）。 */
+export function effectivePriority(session) {
+  const p = session && session.priority;
+  return p && PRIORITY_RANK[p] ? p : DEFAULT_PRIORITY;
+}
+
 /** 归一化 effort 取值：ultracode→xhigh；max 为独立最高档；其余小写匹配已知档。 */
 export function normEffort(v) {
   if (!v) return null;
@@ -182,19 +190,21 @@ function timelineEl(session, ctx) {
   return box;
 }
 
-/** 优先级色点行：4 个色点（白绿蓝紫，左低右高）。当前档高亮，单击当前档清除。 */
+/** 优先级色点行：6 个色点（白绿蓝紫黄红，左低右高）。恒有一档高亮（默认蓝），只能切换、不能清除。 */
 function prioControl(session, ctx) {
   const row = el('div', 'prio-row');
-  row.title = '优先级：越靠右越高（白<绿<蓝<紫）。单击设定，再单击当前档清除。';
+  row.title = '优先级：越靠右越高（白<绿<蓝<紫<黄<红）。默认蓝，单击切换到其它档。';
+  const current = effectivePriority(session); // 未指派回落到默认蓝
   for (const lvl of PRIORITY_LEVELS) {
-    const active = session.priority === lvl;
+    const active = current === lvl;
     const dot = el('button', `prio-dot p-${lvl}${active ? ' active' : ''}`);
     dot.type = 'button';
-    dot.title = `设为「${PRIORITY_LABEL[lvl]}」优先级${active ? '（再点清除）' : ''}`;
+    dot.title = `设为「${PRIORITY_LABEL[lvl]}」优先级${active ? '（当前）' : ''}`;
     dot.setAttribute('aria-label', `优先级 ${PRIORITY_LABEL[lvl]}`);
     dot.addEventListener('click', (e) => {
       e.stopPropagation(); // 不冒泡到卡头（避免同时展开/折叠）
-      ctx.onSetPriority(session.key, active ? null : lvl);
+      if (active) return; // 点当前档 = 无操作（不允许清除）
+      ctx.onSetPriority(session.key, lvl);
     });
     row.append(dot);
   }
@@ -218,7 +228,8 @@ function card(session, ctx, now) {
   if (effort) c.classList.add('e-' + effort);
 
   // 优先级分级：给卡片加 p-<level> class（描边着色，避开被状态色占用的左边条/整卡染色）。
-  if (session.priority) c.classList.add('p-' + session.priority);
+  // 每个会话恒有有效优先级（默认蓝），故所有卡片都带描边。
+  c.classList.add('p-' + effectivePriority(session));
 
   const head = el('div', 'card-head');
   head.append(el('div', 'name', session.name || session.sessionId.slice(0, 8)));
@@ -242,7 +253,7 @@ function card(session, ctx, now) {
   head.append(el('div', `badge s-${session.state}`, stateName(session.state)));
   head.append(el('div', 'caret', '▸'));
 
-  // 优先级色点控件：一排色点，左低右高（白绿蓝紫）。单击设色，单击当前档=清除。
+  // 优先级色点控件：一排色点，左低右高（白绿蓝紫黄红）。默认蓝，单击切换、不能清除。
   // 卡头整体是展开开关，故每个点必须 stopPropagation（仿 enter-btn / summary）。
   if (ctx.onSetPriority) head.append(prioControl(session, ctx));
 
@@ -422,24 +433,24 @@ export function renderSessions(root, ctx) {
 
   const now = Date.now() + ctx.serverSkewMs;
 
-  // 已指派优先级的会话：跨状态置顶为一个独立分区，按 rank 降序、同档最新在上。
+  // 每个会话默认蓝，故不再用「有无优先级」分区，而是用「是否高于默认蓝」：
+  // 有效优先级高于蓝（紫/黄/红）→ 跨状态置顶「重点」区；蓝及以下（蓝/绿/白）→ 留状态分区。
+  const rankOf = (s) => PRIORITY_RANK[effectivePriority(s)] || 0;
+  const baseRank = PRIORITY_RANK[DEFAULT_PRIORITY]; // 蓝 = 3
   const prioritized = filtered
-    .filter((s) => s.priority && PRIORITY_RANK[s.priority])
-    .sort((a, b) => {
-      const d = (PRIORITY_RANK[b.priority] || 0) - (PRIORITY_RANK[a.priority] || 0);
-      return d !== 0 ? d : (b.stateSince || 0) - (a.stateSince || 0);
-    });
+    .filter((s) => rankOf(s) > baseRank)
+    .sort((a, b) => rankOf(b) - rankOf(a) || (b.stateSince || 0) - (a.stateSince || 0));
   if (prioritized.length > 0) {
     const wrap = el('section', 'prioritized');
-    const title = el('div', 'section-title', '已标优先级');
+    const title = el('div', 'section-title', '重点');
     title.append(el('span', 'count', String(prioritized.length)));
     wrap.append(title);
     for (const s of prioritized) wrap.append(card(s, ctx, now));
     root.append(wrap);
   }
 
-  // 其余（未标优先级）会话：沿用现有状态分区 + 区内最新在上。
-  const rest = filtered.filter((s) => !s.priority || !PRIORITY_RANK[s.priority]);
+  // 其余（蓝及以下）会话：沿用现有状态分区 + 区内最新在上。
+  const rest = filtered.filter((s) => rankOf(s) <= baseRank);
   for (const section of SECTIONS) {
     const items = rest
       .filter((s) => section.states.includes(s.state))

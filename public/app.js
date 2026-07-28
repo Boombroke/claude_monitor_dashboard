@@ -44,6 +44,8 @@ const filters = {
 };
 
 let muted = localStorage.getItem('ccmon.muted') === '1';
+// 动态光效开关：默认开启（仅显式存 '0' 时关闭）。关闭时给 <body> 加 no-fx。
+let fxOn = localStorage.getItem('ccmon.fx') !== '0';
 let deferredInstall = null;
 
 // —— DOM ——
@@ -52,6 +54,7 @@ const conn = document.getElementById('conn');
 const btnNotify = document.getElementById('btn-notify');
 const btnInstall = document.getElementById('btn-install');
 const muteToggle = document.getElementById('mute-toggle');
+const fxToggle = document.getElementById('fx-toggle');
 const chipBar = document.getElementById('state-chips');
 const searchBox = document.getElementById('search');
 
@@ -370,6 +373,21 @@ function initMuteToggle() {
   });
 }
 
+// 动态光效开关：勾选=开，取消=给 <body> 加 no-fx 关闭全部循环光效。
+function applyFx() {
+  document.body.classList.toggle('no-fx', !fxOn);
+}
+function initFxToggle() {
+  applyFx(); // 启动即按持久化值应用（关闭时立刻无光效）
+  if (!fxToggle) return;
+  fxToggle.checked = fxOn;
+  fxToggle.addEventListener('change', () => {
+    fxOn = fxToggle.checked;
+    localStorage.setItem('ccmon.fx', fxOn ? '1' : '0');
+    applyFx();
+  });
+}
+
 // —— 状态过滤 chips ——
 function initChips() {
   if (!chipBar) return;
@@ -488,6 +506,7 @@ function restoreScrollOnce() {
 // —— 启动 ——
 initNotifyButton();
 initMuteToggle();
+initFxToggle();
 initChips();
 initSearch();
 initInstall();

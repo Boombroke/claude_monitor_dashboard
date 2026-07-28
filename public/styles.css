@@ -930,3 +930,34 @@ section.prioritized > .section-title {
     transition: none;
   }
 }
+
+/* ============================================================
+   动态光效开关：body.no-fx 关闭所有「持续循环」的装饰性光效
+   （边光呼吸 / 徽章脉动 / 顶部流光 / 状态呼吸 / 脉冲圆点）。
+   保留静态颜色、边框、描边与一次性入场/重排动画——即卡片仍可辨识，
+   只是不再持续发光/脉动。由前端 header 开关切换，localStorage 持久化。
+   ============================================================ */
+body.no-fx .card.s-WORKING,
+body.no-fx .attention .card.s-NEEDS_APPROVAL,
+body.no-fx .card.e-xhigh,
+body.no-fx .card.e-max,
+body.no-fx .card.e-ultra,
+body.no-fx .card.s-DONE_WAITING,
+body.no-fx .card.just-done,
+body.no-fx .effort.e-xhigh,
+body.no-fx .effort.e-max,
+body.no-fx .effort.ultracode,
+body.no-fx .just-done .badge.s-DONE_WAITING {
+  animation: none !important;
+}
+/* 顶部流光扫光（effort 分级 ::after）关闭 */
+body.no-fx .card.e-xhigh::after,
+body.no-fx .card.e-max::after,
+body.no-fx .card.e-ultra::after {
+  display: none !important;
+}
+/* 卡片上的脉冲活动圆点（WORKING 名称点 / workflow 活跃点）改为静止 */
+body.no-fx .card.s-WORKING .name::before,
+body.no-fx .card .meta .wf.wf-active::before {
+  animation: none !important;
+}

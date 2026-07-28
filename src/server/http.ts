@@ -188,6 +188,8 @@ export async function createHttpServer(deps: HttpDeps): Promise<HttpServer> {
     const { id } = req.params as { id: string };
     const s = store.get(id);
     if (!s) return reply.code(404).send({ error: 'not found' });
+    // 已结束会话保持原优先级，不允许调整（前端也会禁用色点；此处兜底防陈旧客户端/直连）。
+    if (s.state === 'DEAD') return reply.code(409).send({ error: 'session ended' });
     const level = (req.body as { level?: unknown } | undefined)?.level ?? null;
     const valid = level === null || (typeof level === 'string' && level in PRIORITY_RANK);
     if (!valid) return reply.code(400).send({ error: 'bad level' });

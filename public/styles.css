@@ -868,6 +868,19 @@ section.prioritized > .section-title {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
 }
 
+/* 已结束会话：优先级只读——只保留当前档作静态标记，其余隐藏，不可点、无 hover。 */
+.prio-row.prio-readonly .prio-dot {
+  cursor: default;
+}
+.prio-row.prio-readonly .prio-dot:not(.active) {
+  display: none;
+}
+.prio-row.prio-readonly .prio-dot.active {
+  transform: none;
+  opacity: 0.85;
+  box-shadow: none;
+}
+
 /* 卡片优先级描边：用 outline（不占 ::before/::after/左边条/整卡染色通道）。 */
 .card.p-white {
   outline: 1px solid color-mix(in srgb, var(--prio-white) 70%, transparent);

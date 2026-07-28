@@ -190,22 +190,32 @@ function timelineEl(session, ctx) {
   return box;
 }
 
-/** 优先级色点行：6 个色点（白绿蓝紫黄红，左低右高）。恒有一档高亮（默认蓝），只能切换、不能清除。 */
+/** 优先级色点行：6 个色点（白绿蓝紫黄红，左低右高）。恒有一档高亮（默认蓝），只能切换、不能清除。
+ *  已结束（DEAD）会话只读：保持原优先级展示，不允许调整。 */
 function prioControl(session, ctx) {
   const row = el('div', 'prio-row');
-  row.title = '优先级：越靠右越高（白<绿<蓝<紫<黄<红）。默认蓝，单击切换到其它档。';
+  const readOnly = session.state === 'DEAD';
+  row.title = readOnly
+    ? '会话已结束，优先级不可修改（保持原值）。'
+    : '优先级：越靠右越高（白<绿<蓝<紫<黄<红）。默认蓝，单击切换到其它档。';
+  if (readOnly) row.classList.add('prio-readonly');
   const current = effectivePriority(session); // 未指派回落到默认蓝
   for (const lvl of PRIORITY_LEVELS) {
     const active = current === lvl;
     const dot = el('button', `prio-dot p-${lvl}${active ? ' active' : ''}`);
     dot.type = 'button';
-    dot.title = `设为「${PRIORITY_LABEL[lvl]}」优先级${active ? '（当前）' : ''}`;
+    dot.disabled = readOnly; // DEAD：禁用，不可点
+    dot.title = readOnly
+      ? `优先级「${PRIORITY_LABEL[current]}」（会话已结束，不可修改）`
+      : `设为「${PRIORITY_LABEL[lvl]}」优先级${active ? '（当前）' : ''}`;
     dot.setAttribute('aria-label', `优先级 ${PRIORITY_LABEL[lvl]}`);
-    dot.addEventListener('click', (e) => {
-      e.stopPropagation(); // 不冒泡到卡头（避免同时展开/折叠）
-      if (active) return; // 点当前档 = 无操作（不允许清除）
-      ctx.onSetPriority(session.key, lvl);
-    });
+    if (!readOnly) {
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation(); // 不冒泡到卡头（避免同时展开/折叠）
+        if (active) return; // 点当前档 = 无操作（不允许清除）
+        ctx.onSetPriority(session.key, lvl);
+      });
+    }
     row.append(dot);
   }
   return row;

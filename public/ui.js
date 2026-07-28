@@ -435,10 +435,11 @@ export function renderSessions(root, ctx) {
 
   // 每个会话默认蓝，故不再用「有无优先级」分区，而是用「是否高于默认蓝」：
   // 有效优先级高于蓝（紫/黄/红）→ 跨状态置顶「重点」区；蓝及以下（蓝/绿/白）→ 留状态分区。
+  // 但已结束（DEAD）会话无论什么优先级都不置顶——统一沉到最底「已结束」区。
   const rankOf = (s) => PRIORITY_RANK[effectivePriority(s)] || 0;
   const baseRank = PRIORITY_RANK[DEFAULT_PRIORITY]; // 蓝 = 3
   const prioritized = filtered
-    .filter((s) => rankOf(s) > baseRank)
+    .filter((s) => s.state !== 'DEAD' && rankOf(s) > baseRank)
     .sort((a, b) => rankOf(b) - rankOf(a) || (b.stateSince || 0) - (a.stateSince || 0));
   if (prioritized.length > 0) {
     const wrap = el('section', 'prioritized');
@@ -449,13 +450,17 @@ export function renderSessions(root, ctx) {
     root.append(wrap);
   }
 
-  // 其余（蓝及以下）会话：沿用现有状态分区，区内先按优先级降序、再按最新在上。
-  // （调低优先级后需下沉到同分区低优先级卡片之下——故优先级是主排序键，不能只按时间。）
-  const rest = filtered.filter((s) => rankOf(s) <= baseRank);
+  // 其余会话：沿用现有状态分区（已结束恒在最后）。DEAD 会话即使高优先级也落这里。
+  // 活跃分区内按「优先级降序 → 最新在上」；已结束区只按结束时间（最近在上），不看优先级。
+  const rest = filtered.filter((s) => s.state === 'DEAD' || rankOf(s) <= baseRank);
   for (const section of SECTIONS) {
     const items = rest
       .filter((s) => section.states.includes(s.state))
-      .sort((a, b) => rankOf(b) - rankOf(a) || (b.stateSince || 0) - (a.stateSince || 0));
+      .sort((a, b) =>
+        section.key === 'dead'
+          ? (b.stateSince || 0) - (a.stateSince || 0)
+          : rankOf(b) - rankOf(a) || (b.stateSince || 0) - (a.stateSince || 0),
+      );
     if (items.length === 0) continue;
     const wrap = el('section', section.key === 'attention' ? 'attention' : '');
     const title = el('div', 'section-title', section.title);
